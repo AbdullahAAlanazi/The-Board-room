@@ -50,7 +50,7 @@ app.add_middleware(
 )
 
 # ── In-memory session (single-user MVP) ──────────────────────────────────────
-_session: dict = {"profile": None, "retriever": None}
+_session: dict = {"profile": None, "retriever": build_retriever()}  # load on startup if docs exist
 
 _LANGUAGES = {"ar": "Arabic", "en": "English"}
 

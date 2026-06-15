@@ -10,3 +10,6 @@ pydantic-settings      # load config from .env
 python-dotenv          # read the .env file
 faiss-cpu              # local vector store (RAG)
 pypdf                  # PDF loader
+fastapi                # REST API framework
+uvicorn[standard]      # ASGI server
+python-multipart       # multipart/form-data (file uploads)

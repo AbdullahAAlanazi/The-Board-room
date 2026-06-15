@@ -1,43 +1,29 @@
-"""The three-round board debate orchestrator.
-
-This is the engine. It runs whatever advisors are registered through
-three rounds and assembles a BoardResult. Adding or removing an advisor
-never requires touching this file.
-"""
-
 from __future__ import annotations
-
 from langchain_core.prompts import ChatPromptTemplate
 
-import boardroom.advisors  # triggers all @register decorators
+import boardroom.advisors 
 from boardroom.llm import get_llm
 from boardroom.registry import get_advisors
 from boardroom.schema import (
     AdvisorResponse,
     BoardResult,
-    ChairmanVerdict,
+    ChairmanVerdict
 )
 
-
-def _format_round1(responses: list[AdvisorResponse]) -> str:
-    """Format round 1 positions for the round 2 prompt."""
+def _format_round1(responses: list[AdvisorResponse]) -> str: 
     lines = []
     for r in responses:
-        lines.append(f"[{r.advisor}] Vote: {r.vote.value}\n{r.reasoning}")
-    return "\n\n".join(lines)
-
-
-def run_board(decision: str, context: str = "") -> BoardResult:
-    """Run a full three-round board meeting on a business decision."""
+        lines.append(f'[{r.advisor}] Vote: {r.vote.value}\n{r.reasoning}')
+    return '\n\n'.join(lines)
+    
+def run_board(decision: str, context: str = '') -> BoardResult: 
 
     advisors = get_advisors()
-    if not advisors:
-        raise RuntimeError(
-            "No advisors registered. Add at least one to advisors/__init__.py"
-        )
-
-    # ── Round 1: independent analysis ───────────────────────────────────
+    if not advisors: 
+        raise RuntimeError("No advisors regigstered. Add at least one to advisors/__init__.py")
+    
     print(f"\n[Round 1] {len(advisors)} advisors analyzing independently...")
+
     round1: list[AdvisorResponse] = []
     for advisor in advisors:
         print(f"  → {advisor.name} thinking...")
@@ -55,7 +41,6 @@ def run_board(decision: str, context: str = "") -> BoardResult:
         )
         round2.append(advisor.analyze(decision, context=debate_context))
 
-    # ── Round 3: chairman synthesis ──────────────────────────────────────
     print("\n[Round 3] Chairman synthesizing...")
     verdict = _chairman_synthesize(decision, round1, round2)
 
@@ -66,7 +51,6 @@ def run_board(decision: str, context: str = "") -> BoardResult:
         verdict=verdict,
     )
 
-
 def _chairman_synthesize(
     decision: str,
     round1: list[AdvisorResponse],
@@ -74,10 +58,11 @@ def _chairman_synthesize(
 ) -> ChairmanVerdict:
     """The chairman reads all arguments and produces a final verdict."""
 
-    all_arguments = "\n\n".join(
-        [f"[{r.advisor} — Round 1] {r.reasoning}" for r in round1]
-        + [f"[{r.advisor} — Round 2] {r.reasoning}" for r in round2]
-    )
+    all_arguments = "\n\n".join([
+        f"[{r.advisor} — Round 1] {r.reasoning}" for r in round1
+    ] + [
+        f"[{r.advisor} — Round 2] {r.reasoning}" for r in round2
+    ])
 
     prompt = ChatPromptTemplate.from_messages([
         ("system",

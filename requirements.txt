@@ -4,6 +4,7 @@
 
 langchain              # core chains / prompt + LLM plumbing
 langchain-openai       # OpenAI chat model + embeddings
+langchain-community    # extra integrations (document loaders, retrievers)
 pydantic               # the shared data schema (the contract)
 pydantic-settings      # load config from .env
 python-dotenv          # read the .env file

@@ -11,3 +11,4 @@ pypdf                  # PDF loader
 fastapi                # REST API framework
 uvicorn[standard]      # ASGI server
 python-multipart       # multipart/form-data (file uploads)
+aiofiles               # required by FastAPI StaticFiles

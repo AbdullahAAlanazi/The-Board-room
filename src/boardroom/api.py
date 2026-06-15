@@ -8,6 +8,7 @@ Endpoints:
     POST /api/discover        — chairman discovery questions
     POST /api/board           — run board (direct, no session)
     POST /api/board/stream    — SSE streaming board run
+    GET  /*                   — serves the built React frontend (frontend/dist/)
 """
 
 from __future__ import annotations
@@ -17,12 +18,16 @@ import contextlib
 import json
 import shutil
 import sys
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 import boardroom.advisors  # ensure advisors are registered
 from boardroom.board import (
@@ -224,3 +229,12 @@ async def board_stream(req: BoardRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── Serve built React frontend (must be last) ─────────────────────────────────
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        return FileResponse(str(FRONTEND_DIST / "index.html"))

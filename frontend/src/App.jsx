@@ -154,10 +154,14 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
 
   const busy = phase === "discovering" || phase === "running";
 
-  // Build context string from answered discovery questions.
+  // Build context string from answered per-advisor questions.
   const buildContext = (qs, ans) =>
     qs
-      .map((q, i) => (ans[i]?.trim() ? `Q: ${q}\nA: ${ans[i].trim()}` : null))
+      .map((q, i) =>
+        ans[i]?.trim()
+          ? `${q.advisor} asks: ${q.question}\nAnswer: ${ans[i].trim()}`
+          : null
+      )
       .filter(Boolean)
       .join("\n\n");
 
@@ -275,22 +279,31 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
                 </div>
               </div>
               <div className="discover-questions">
-                {questions.map((q, i) => (
-                  <div key={i} className="discover-q">
-                    <label className="dq-label">
-                      {q}
-                      <span className="dq-optional">{t(UI.discoverOptional)}</span>
-                    </label>
-                    <textarea
-                      className="dq-input"
-                      rows={2}
-                      value={answers[i] || ""}
-                      onChange={(e) =>
-                        setAnswers((a) => ({ ...a, [i]: e.target.value }))
-                      }
-                    />
-                  </div>
-                ))}
+                {questions.map((q, i) => {
+                  const adv = ADVISORS[q.advisor];
+                  return (
+                    <div key={i} className="discover-q">
+                      {adv && (
+                        <div className="dq-advisor" style={{ color: adv.accent }}>
+                          <AdvisorIcon name={adv.icon} color={adv.accent} size={13} />
+                          <span>{t(adv.name)}</span>
+                        </div>
+                      )}
+                      <label className="dq-label">
+                        {q.question}
+                        <span className="dq-optional">{t(UI.discoverOptional)}</span>
+                      </label>
+                      <textarea
+                        className="dq-input"
+                        rows={2}
+                        value={answers[i] || ""}
+                        onChange={(e) =>
+                          setAnswers((a) => ({ ...a, [i]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  );
+                })}
               </div>
               <div className="discover-actions">
                 <button className="convene-btn" onClick={handleConvene}>

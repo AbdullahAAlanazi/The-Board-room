@@ -33,16 +33,16 @@ export const UI = {
 
   // discovery phase
   discoverLoading: {
-    en: "The chairman is preparing questions…",
-    ar: "الرئيس يُعدّ الأسئلة…",
+    en: "Each advisor is preparing a question…",
+    ar: "كل مستشار يُعدّ سؤاله…",
   },
   discoverTitle: {
-    en: "Before we begin",
-    ar: "قبل أن نبدأ",
+    en: "One question from each advisor",
+    ar: "سؤال من كل مستشار",
   },
   discoverLede: {
-    en: "The chairman wants a bit more context to sharpen the debate.",
-    ar: "الرئيس يريد فهم السياق بشكل أعمق قبل انعقاد المجلس.",
+    en: "Answer what you can — their questions will sharpen the debate.",
+    ar: "أجب على ما تستطيع — أسئلتهم ستحدّد ملامح النقاش.",
   },
   discoverOptional: { en: "(optional)", ar: "(اختياري)" },
   discoverSkip: {

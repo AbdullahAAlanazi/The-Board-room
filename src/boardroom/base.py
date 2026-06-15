@@ -42,6 +42,26 @@ class BaseAdvisor:
 
         self._chain = prompt | llm.with_structured_output(AdvisorResponse)
 
+    def ask_question(self, decision: str, language: str = "English") -> str:
+        """Generate one clarifying question from this advisor's perspective."""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "You are the {name} on a company's board of advisors.\n{persona}\n\n"
+             "A business decision has been brought to the board. Ask ONE focused clarifying "
+             "question — the single most important thing YOU need to know that the decision "
+             "statement doesn't already answer. One sentence, no preamble. "
+             "Write entirely in {language}."),
+            ("human", "Business decision: {decision}"),
+        ])
+        llm = get_llm(temperature=0.4, max_tokens=80)
+        result = (prompt | llm).invoke({
+            "name": self.name,
+            "persona": self.persona,
+            "decision": decision,
+            "language": language,
+        })
+        return result.content.strip()
+
     def search_query(self, decision: str) -> str:
         """What this advisor looks up. Defaults to the decision plus this
         advisor's `focus` keywords. Override for fully custom retrieval."""

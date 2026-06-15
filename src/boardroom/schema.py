@@ -89,16 +89,18 @@ class ChairmanVerdict(BaseModel):
     )
 
 
-class DiscoveryResult(BaseModel):
-    """Questions the Chairman asks before the board convenes — to surface context
-    that will sharpen the debate. The API returns this from /api/discover."""
+class AdvisorQuestion(BaseModel):
+    """One clarifying question from a specific advisor."""
 
-    questions: list[str] = Field(
-        description=(
-            "2-5 targeted, open-ended discovery questions. "
-            "Each must target a different unknown (budget, timeline, competition, "
-            "regulation, existing capabilities). Skip anything the decision already answers."
-        )
+    advisor: str = Field(description="The advisor's name/role, e.g. 'CFO'.")
+    question: str = Field(description="One focused question from this advisor's perspective.")
+
+
+class DiscoveryResult(BaseModel):
+    """One clarifying question per advisor, collected before the board convenes."""
+
+    questions: list[AdvisorQuestion] = Field(
+        description="One targeted question per advisor, each from their own perspective."
     )
 
 

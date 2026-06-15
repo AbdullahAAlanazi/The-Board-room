@@ -8,6 +8,7 @@ from boardroom.llm import get_llm
 from boardroom.rag import build_retriever
 from boardroom.registry import get_advisors
 from boardroom.schema import (
+    AdvisorQuestion,
     AdvisorResponse,
     BoardResult,
     ChairmanVerdict,
@@ -15,24 +16,17 @@ from boardroom.schema import (
 )
 
 
-def discover_questions(decision: str, language: str = "English") -> DiscoveryResult:
-    """Generate 2-5 discovery questions the Chairman asks before the board convenes."""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system",
-         "You are the Chairman of a business advisory board. A leader has brought a decision "
-         "to the board. Before convening the full debate, your job is to ask 2-5 focused "
-         "discovery questions that will give the advisors the context they need.\n\n"
-         "RULES:\n"
-         "• Ask ONLY what the decision statement doesn't already answer.\n"
-         "• Target the biggest unknowns: budget/timeline constraints, existing capabilities, "
-         "competitive landscape, regulatory situation, or stakeholder buy-in.\n"
-         "• Be concise and direct — one crisp sentence per question, no preamble.\n"
-         "• Write all questions entirely in {language}."),
-        ("human", "Decision: {decision}\n\nGenerate your discovery questions."),
-    ])
-    llm = get_llm(temperature=0.4, max_tokens=250)
-    chain = prompt | llm.with_structured_output(DiscoveryResult)
-    return chain.invoke({"decision": decision, "language": language})
+def discover_questions(decision: str, language: str = "English", retriever=None) -> DiscoveryResult:
+    """Each advisor asks one clarifying question before the debate begins."""
+    advisors = get_advisors(retriever=retriever)
+
+    def _ask(adv):
+        return AdvisorQuestion(advisor=adv.name, question=adv.ask_question(decision, language))
+
+    with ThreadPoolExecutor(max_workers=len(advisors)) as pool:
+        questions = list(pool.map(_ask, advisors))
+
+    return DiscoveryResult(questions=questions)
 
 
 def _format_round1(responses: list[AdvisorResponse]) -> str:

@@ -71,8 +71,8 @@ def _format_profile(profile: dict) -> str:
     )
 
 
-def _build_context(decision: str) -> Optional[str]:
-    """Combine company profile with relevant RAG chunks."""
+def _build_context(decision: str, extra: str = "") -> Optional[str]:
+    """Combine company profile, RAG chunks, and any extra context (e.g. discovery Q&A)."""
     profile = _session.get("profile")
     retriever = _session.get("retriever")
 
@@ -84,6 +84,8 @@ def _build_context(decision: str) -> Optional[str]:
         if docs:
             chunks = "\n\n".join(d.page_content for d in docs)
             parts.append(f"--- Relevant company documents ---\n{chunks}")
+    if extra and extra.strip():
+        parts.append(f"--- Additional context ---\n{extra.strip()}")
 
     return "\n\n".join(parts) if parts else None
 
@@ -174,21 +176,29 @@ def discover(req: BoardRequest):
 @app.post("/api/board", response_model=BoardResult)
 def api_board(req: BoardRequest):
     language = _LANGUAGES.get(req.lang, "English")
+    context = _build_context(req.decision, extra=req.context)
     with contextlib.redirect_stdout(sys.stderr):
-        return run_board(req.decision, req.context or None, language=language, fast=req.fast)
+        return run_board(
+            decision=req.decision,
+            context=context,
+            language=language,
+            fast=req.fast,
+            retriever=_session.get("retriever"),
+        )
 
 
 @app.post("/api/board/stream")
 async def board_stream(req: BoardRequest):
     """SSE endpoint — yields each advisor response as it completes."""
     language = _LANGUAGES.get(req.lang, "English")
-    advisors = get_advisors()
+    context = _build_context(req.decision, extra=req.context)
+    advisors = get_advisors(retriever=_session.get("retriever"))
 
     async def generate():
         loop = asyncio.get_event_loop()
 
         r1_tasks = [
-            loop.run_in_executor(None, adv.analyze, req.decision, req.context or None, language)
+            loop.run_in_executor(None, adv.analyze, req.decision, context, language)
             for adv in advisors
         ]
         round1 = []

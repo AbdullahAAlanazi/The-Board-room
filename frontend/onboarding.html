@@ -643,7 +643,7 @@ body{
         <div class="advisor-mini"><svg class="ring" width="48" height="48"><use href="#char-customer"/></svg><span>Customer</span></div>
       </div>
 
-      <button class="btn-full"><i class="ti ti-arrow-right"></i> Convene the board</button>
+      <button class="btn-full" onclick="window.location.href = APP_URL"><i class="ti ti-arrow-right"></i> Convene the board</button>
     </div>
   </div>
 
@@ -794,6 +794,7 @@ function removeFile(i){
 }
 
 const API_URL = 'http://localhost:8000';
+const APP_URL = 'http://localhost:5173';
 
 function buildOnboardingPayload(){
   return {

@@ -7,4 +7,5 @@ Example: teammate adds legal.py → they add:
     from . import legal
 """
 
-from . import cfo  # CFO advisor (example — replace/extend with real advisors)
+from . import cfo
+from . import legal

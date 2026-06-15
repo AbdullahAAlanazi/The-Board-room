@@ -60,6 +60,24 @@ export const ADVISORS = {
       ar: ["جريء", "سريع", "مقتنص للفرص"],
     },
   },
+  Customer: {
+    id: "Customer",
+    accent: "#c5512a", // orange
+    accentSoft: "#faeae1",
+    accentDeep: "#8f3318",
+    name: { en: "Customer", ar: "مستشار العملاء" },
+    role: { en: "customer experience advisor", ar: "مستشار تجربة العملاء" },
+    tag: { en: "the advocate", ar: "المدافع" },
+    icon: "users",
+    quote: {
+      en: "How will this affect the customer? Do they actually want this?",
+      ar: "كيف سيؤثّر هذا على العميل؟ هل يريدون ذلك فعلاً؟",
+    },
+    traits: {
+      en: ["Empathetic", "Evidence-driven", "Customer-first"],
+      ar: ["متعاطف", "يعتمد الأدلة", "العميل أولاً"],
+    },
+  },
 };
 
 // Tension-map edges between the three advisors (authored from the debate).

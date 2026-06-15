@@ -9,3 +9,4 @@ Example: teammate adds legal.py → they add:
 
 from . import cfo
 from . import legal
+from . import market

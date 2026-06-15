@@ -18,18 +18,26 @@ class BaseAdvisor:
         
         self.retriever = retriever
         
-        llm = get_llm(temperature=temperature)
+        # 200 tokens: one-line rationale + 2 tight sentences of reasoning.
+        llm = get_llm(temperature=temperature, max_tokens=200)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system",
              "You are the {name} on a company's board of advisors.\n"
              "{persona}\n\n"
-             "Analyze the decision strictly through your lens. Take a clear "
-             "stance and defend it; disagreeing with other advisors is good — "
-             "the board's value comes from genuine tension."),
+             "STYLE RULES — follow them strictly:\n"
+             "• Write the way a seasoned board member speaks in a real meeting: "
+             "direct, confident, occasionally blunt.\n"
+             "• Never use filler phrases: no 'it's important to note', "
+             "'it's worth considering', 'while X has merits'. Cut straight to your point.\n"
+             "• Take a clear stance and defend it. Agreeing with everyone is not an option.\n"
+             "• `rationale`: ONE punchy sentence — a thesis, not a hedge.\n"
+             "• `reasoning`: max 3 sentences. Every word must earn its place.\n"
+             "• Follow any ROUND 2 INSTRUCTIONS embedded in the context.\n\n"
+             "Write your `rationale` and `reasoning` entirely in {language}."),
             ("human",
              "Business decision:\n{decision}\n\n"
-             "Company context:\n{context}"),
+             "{context}"),
         ])
 
         self._chain = prompt | llm.with_structured_output(AdvisorResponse)
@@ -48,7 +56,12 @@ class BaseAdvisor:
         docs = self.retriever.invoke(self.search_query(decision))
         return "\n\n".join(d.page_content for d in docs)
     
-    def analyze(self, decision: str, context: Optional[str] = None) -> AdvisorResponse:
+    def analyze(
+        self,
+        decision: str,
+        context: Optional[str] = None,
+        language: str = "English",
+    ) -> AdvisorResponse:
         # If the caller didn't supply context, the advisor retrieves its own.
         if context is None:
             context = self.retrieve(decision)
@@ -57,6 +70,7 @@ class BaseAdvisor:
             "persona": self.persona,
             "decision": decision,
             "context": context,
+            "language": language,
         })
         result.advisor = self.name
         return result

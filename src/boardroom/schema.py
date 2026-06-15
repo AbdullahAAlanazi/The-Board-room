@@ -50,9 +50,27 @@ class AdvisorResponse(BaseModel):
     )
 
 
+class Stance(str, Enum):
+    """The chairman's final call on the decision itself."""
+
+    PROCEED = "proceed"         # go ahead
+    AGAINST = "against"         # do not
+    CONDITIONAL = "conditional" # go ahead, but only if conditions are met
+
+
 class ChairmanVerdict(BaseModel):
     """The chairman's synthesis after weighing every advisor's argument."""
 
+    stance: Stance = Field(
+        description="The final call: proceed, against, or conditional. This is a "
+        "synthesis of the arguments — NOT a majority vote count. You may overrule "
+        "the majority if the stronger arguments point the other way.",
+    )
+    board_note: str = Field(
+        description="ONE sentence explaining how your call relates to the advisors' "
+        "votes — especially if you went against the majority, say why (e.g. their "
+        "objections were conditional, not absolute).",
+    )
     recommendation: str = Field(
         description="The final recommendation the leader should act on."
     )
@@ -68,6 +86,19 @@ class ChairmanVerdict(BaseModel):
     next_steps: List[str] = Field(
         default_factory=list,
         description="Concrete next actions for the leader.",
+    )
+
+
+class DiscoveryResult(BaseModel):
+    """Questions the Chairman asks before the board convenes — to surface context
+    that will sharpen the debate. The API returns this from /api/discover."""
+
+    questions: list[str] = Field(
+        description=(
+            "2-5 targeted, open-ended discovery questions. "
+            "Each must target a different unknown (budget, timeline, competition, "
+            "regulation, existing capabilities). Skip anything the decision already answers."
+        )
     )
 
 

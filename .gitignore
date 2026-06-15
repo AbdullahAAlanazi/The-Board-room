@@ -1,12 +1,50 @@
 # Secrets — never commit real keys
 .env
+.env.*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
 
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
+*.pyo
+*.pyd
 .venv/
+venv/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+.tox/
 
-# OS / editor
+# Testing / coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Logs
+logs/
+*.log
+
+# Editors / OS
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
+
+# Cache / temp
+.cache/
+.mypy_cache/
+
+# Environment files
+.env.local
+.env.*.local
+

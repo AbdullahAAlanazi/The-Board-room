@@ -5,6 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 import boardroom.advisors
 from boardroom.llm import get_llm
+from boardroom.rag import build_retriever
 from boardroom.registry import get_advisors
 from boardroom.schema import (
     AdvisorResponse,
@@ -14,22 +15,26 @@ from boardroom.schema import (
 )
 
 
-def discover_questions(decision: str, language: str = "English") -> DiscoveryResult:
-    """Generate 2-5 discovery questions the Chairman asks before the board convenes."""
+def discover_questions(
+    decision: str, language: str = "English", retriever=None
+) -> DiscoveryResult:
+    """The Chairman asks discovery questions ONLY when the decision is vague or
+    missing context. Returns an empty list when it's already clear enough."""
     prompt = ChatPromptTemplate.from_messages([
         ("system",
-         "You are the Chairman of a business advisory board. A leader has brought a decision "
-         "to the board. Before convening the full debate, your job is to ask 2-5 focused "
-         "discovery questions that will give the advisors the context they need.\n\n"
-         "RULES:\n"
-         "• Ask ONLY what the decision statement doesn't already answer.\n"
-         "• Target the biggest unknowns: budget/timeline constraints, existing capabilities, "
-         "competitive landscape, regulatory situation, or stakeholder buy-in.\n"
-         "• Be concise and direct — one crisp sentence per question, no preamble.\n"
-         "• Write all questions entirely in {language}."),
-        ("human", "Decision: {decision}\n\nGenerate your discovery questions."),
+         "You are the Chairman of a business advisory board. Before convening the debate, "
+         "judge whether the decision is specific enough to debate, or too vague.\n\n"
+         "TEST: a decision is SPECIFIC if it names the concrete action AND at least the "
+         "scope/scale, budget, or timeline. It is VAGUE if it's a bare one-liner missing the "
+         "basics (what exactly / where / how big).\n\n"
+         "• VAGUE (e.g. 'Should we expand?', 'Should we hire?', 'Should we go digital?') → ask "
+         "2-3 short questions for the missing basics.\n"
+         "• SPECIFIC (e.g. 'Should we open a 2nd Jeddah branch, 500k SAR, in 3 months?') → "
+         "return an EMPTY list; do NOT ask about anything the decision already states.\n\n"
+         "Never ask more than 3. One crisp sentence each, no preamble. Write in {language}."),
+        ("human", "Decision: {decision}\n\nIf specific, return empty questions. If vague, ask the missing basics."),
     ])
-    llm = get_llm(temperature=0.4, max_tokens=250)
+    llm = get_llm(temperature=0.3, max_tokens=200)
     chain = prompt | llm.with_structured_output(DiscoveryResult)
     return chain.invoke({"decision": decision, "language": language})
 
@@ -68,10 +73,10 @@ def round2_context(round1: list[AdvisorResponse], context: str) -> str:
 
 
 def run_round1(
-    decision: str, context: str, language: str = "English"
+    decision: str, context: str, language: str = "English", retriever=None
 ) -> list[AdvisorResponse]:
     """Round 1 — every advisor gives an independent perspective, in parallel."""
-    advisors = get_advisors()
+    advisors = get_advisors(retriever=retriever)
     with ThreadPoolExecutor(max_workers=max(1, len(advisors))) as pool:
         return list(pool.map(
             lambda adv: adv.analyze(decision, context, language=language),
@@ -84,9 +89,10 @@ def run_round2(
     context: str,
     round1: list[AdvisorResponse],
     language: str = "English",
+    retriever=None,
 ) -> list[AdvisorResponse]:
     """Round 2 — every advisor responds to the others, in parallel."""
-    advisors = get_advisors()
+    advisors = get_advisors(retriever=retriever)
     ctx = round2_context(round1, context)
     with ThreadPoolExecutor(max_workers=max(1, len(advisors))) as pool:
         return list(pool.map(
@@ -97,21 +103,25 @@ def run_round2(
 
 def run_board(
     decision: str,
-    context: str = "",
+    context: str | None = None,
     language: str = "English",
     fast: bool = False,
+    retriever=None,
 ) -> BoardResult:
     """Run the full board meeting.
 
     fast=True: skip Round 2 (parallel R1 + chairman only) — cuts time in half.
+    retriever: pre-built FAISS retriever; built fresh if not provided.
     """
-    advisors = get_advisors()
+    if retriever is None:
+        retriever = build_retriever()
+    advisors = get_advisors(retriever=retriever)
     if not advisors:
         raise RuntimeError("No advisors registered. Add at least one to advisors/__init__.py")
 
     t0 = time.time()
     print(f"\n[Round 1] {len(advisors)} advisors giving perspectives in parallel...")
-    round1 = run_round1(decision, context, language=language)
+    round1 = run_round1(decision, context or "", language=language, retriever=retriever)
     print(f"  [done] Round 1 in {time.time()-t0:.1f}s")
 
     if fast:
@@ -120,7 +130,7 @@ def run_board(
     else:
         t1 = time.time()
         print("\n[Round 2] Advisors responding in parallel...")
-        round2 = run_round2(decision, context, round1, language=language)
+        round2 = run_round2(decision, context or "", round1, language=language, retriever=retriever)
         print(f"  [done] Round 2 in {time.time()-t1:.1f}s")
 
     t2 = time.time()

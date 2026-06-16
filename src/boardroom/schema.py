@@ -126,13 +126,15 @@ class ChairmanVerdict(BaseModel):
 
 class DiscoveryResult(BaseModel):
     """Questions the Chairman asks before the board convenes — to surface context
-    that will sharpen the debate. The API returns this from /api/discover."""
+    that will sharpen the debate. Empty when the decision is already clear enough."""
 
     questions: list[str] = Field(
+        default_factory=list,
         description=(
-            "2-5 targeted, open-ended discovery questions. "
-            "Each must target a different unknown (budget, timeline, competition, "
-            "regulation, existing capabilities). Skip anything the decision already answers."
+            "0-5 targeted discovery questions. Return an EMPTY list when the "
+            "decision is already specific and well-scoped. Otherwise ask only what "
+            "is genuinely missing (budget, timeline, competition, regulation, "
+            "existing capabilities)."
         )
     )
 

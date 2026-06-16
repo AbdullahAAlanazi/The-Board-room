@@ -1,6 +1,4 @@
-# --- AI Board Room: skeleton dependencies (kept minimal on purpose) ---
-# Only what the frame needs. RAG (chromadb), the API (fastapi), and the UI
-# get added later, by their own workstreams — they are not part of the skeleton.
+# --- AI Board Room: dependencies ---
 
 langchain              # core chains / prompt + LLM plumbing
 langchain-openai       # OpenAI chat model + embeddings
@@ -8,5 +6,9 @@ langchain-community    # extra integrations (document loaders, retrievers)
 pydantic               # the shared data schema (the contract)
 pydantic-settings      # load config from .env
 python-dotenv          # read the .env file
-fastapi                # live board API for the presentation UI
-uvicorn[standard]      # ASGI server to run the FastAPI app
+faiss-cpu              # local vector store (RAG)
+pypdf                  # PDF loader
+fastapi                # REST API framework
+uvicorn[standard]      # ASGI server
+python-multipart       # multipart/form-data (file uploads)
+aiofiles               # required by FastAPI StaticFiles

@@ -48,3 +48,8 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Company documents — real PDFs should not live in git
+documents/*.pdf
+
+# FAISS index cache — derived from documents, rebuilt automatically
+.rag_cache/

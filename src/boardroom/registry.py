@@ -15,6 +15,5 @@ def register(advisor_cls: Type[BaseAdvisor]) -> Type[BaseAdvisor]:
 def registered_classes() -> List[Type[BaseAdvisor]]:
     return list(_ADVISORS)
 
-def get_advisors() -> List[BaseAdvisor]:
-
-    return [cls() for cls in _ADVISORS]
+def get_advisors(retriever=None) -> List[BaseAdvisor]:
+    return [cls(retriever=retriever) for cls in _ADVISORS]

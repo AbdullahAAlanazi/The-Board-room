@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Board Room — Onboarding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.0.0/dist/tabler-icons.min.css">
+<style>
+:root{
+  --bg:#f7f4ec;
+  --bg-warm:#f1ece1;
+  --card:#fffdf9;
+  --ink:#16181d;
+  --ink-soft:#474d5a;
+  --ink-faint:#8b909e;
+  --line:#e6e0d3;
+  --line-soft:#efeae0;
+  --legal:#0f7a5e;     --legal-bg:#e4f2ec;
+  --finance:#1f5fa8;   --finance-bg:#e7f0fa;
+  --market:#6f4bce;    --market-bg:#eee9fa;
+  --customer:#c5512a;  --customer-bg:#faeae1;
+  --r:16px; --r-sm:11px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Inter',sans-serif;
+  font-size:15px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ── Top bar (identical to boardroom-app) ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:22px 40px 18px;
+  background:linear-gradient(var(--bg) 72%,rgba(247,244,236,0));
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-mark{
+  width:36px;height:36px;border-radius:11px;
+  background:var(--ink);display:flex;align-items:center;justify-content:center;color:var(--bg)
+}
+.brand-mark i{font-size:20px}
+.brand-name{font-family:'Fraunces',serif;font-size:19px;font-weight:600;letter-spacing:-0.01em}
+.brand-name span{font-style:italic;font-weight:400;color:var(--ink-soft)}
+.topbar-right{font-size:13px;color:var(--ink-faint)}
+
+/* ── Shell ── */
+.shell{
+  max-width:640px;margin:0 auto;
+  padding:20px 22px 80px;
+  flex:1;display:flex;flex-direction:column;
+}
+
+/* ── Progress bar ── */
+.progress-wrap{margin-bottom:36px}
+.progress-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.progress-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-faint)}
+.progress-step{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint)}
+.progress-track{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--ink);border-radius:2px;transition:width 0.6s cubic-bezier(0.16,1,0.3,1)}
+.step-dots{display:flex;gap:6px;margin-top:10px}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--line);transition:all 0.3s}
+.sdot.done{background:var(--ink)}
+.sdot.active{background:var(--ink);width:18px;border-radius:3px}
+
+/* ── Question card ── */
+.q-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:32px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.03),0 12px 40px rgba(22,24,29,0.05);
+  animation:cardIn 0.45s cubic-bezier(0.16,1,0.3,1);
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+.q-eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--customer);margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.q-eyebrow::before{
+  content:'';width:20px;height:2px;
+  background:var(--customer);border-radius:1px;display:inline-block;
+}
+.q-title{
+  font-family:'Fraunces',serif;
+  font-size:clamp(22px,4vw,30px);
+  font-weight:500;line-height:1.2;
+  letter-spacing:-0.01em;
+  margin-bottom:8px;
+}
+.q-hint{font-size:14px;color:var(--ink-faint);margin-bottom:24px}
+
+/* ── Input styles ── */
+.q-input{
+  width:100%;
+  background:var(--bg);
+  border:1px solid var(--line);
+  border-radius:var(--r-sm);
+  padding:13px 16px;
+  font-family:'Inter',sans-serif;
+  font-size:15px;color:var(--ink);
+  outline:none;
+  transition:border-color 0.2s,box-shadow 0.2s;
+  resize:none;
+}
+.q-input:focus{border-color:var(--ink-soft);box-shadow:0 0 0 3px rgba(22,24,29,0.06)}
+.q-input::placeholder{color:var(--ink-faint)}
+
+/* Option chips (multiple choice questions) */
+.options{display:flex;flex-direction:column;gap:10px}
+.opt{
+  display:flex;align-items:center;gap:14px;
+  background:var(--bg);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:13px 16px;
+  cursor:pointer;transition:all 0.18s;
+  font-size:14px;color:var(--ink-soft);
+}
+.opt:hover{background:var(--bg-warm);border-color:var(--ink-faint)}
+.opt.selected{
+  background:var(--card);border-color:var(--ink);color:var(--ink);
+  box-shadow:0 0 0 1px var(--ink);
+}
+.opt-radio{
+  width:18px;height:18px;border-radius:50%;
+  border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:all 0.18s;
+}
+.opt.selected .opt-radio{background:var(--ink);border-color:var(--ink)}
+.opt.selected .opt-radio::after{content:'';width:7px;height:7px;border-radius:50%;background:#fff}
+.opt-icon{font-size:18px;flex-shrink:0}
+.opt-text{flex:1}
+.opt-label{font-weight:500;font-size:14px;color:var(--ink)}
+.opt-desc{font-size:12px;color:var(--ink-faint);margin-top:1px}
+
+/* Multi-select chips (horizontal) */
+.chip-grid{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  padding:9px 15px;border:1px solid var(--line);
+  border-radius:20px;font-size:13px;font-weight:500;
+  color:var(--ink-soft);cursor:pointer;
+  background:var(--bg);transition:all 0.15s;
+}
+.chip:hover{background:var(--bg-warm);border-color:var(--ink-faint)}
+.chip.selected{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* Revenue slider */
+.slider-wrap{padding:8px 0}
+.slider-val{
+  font-family:'Fraunces',serif;font-size:32px;font-weight:500;
+  letter-spacing:-0.02em;margin-bottom:16px;color:var(--ink);
+}
+.q-slider{
+  -webkit-appearance:none;width:100%;height:4px;
+  border-radius:2px;background:var(--line);outline:none;cursor:pointer;
+}
+.q-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:22px;height:22px;
+  border-radius:50%;background:var(--ink);cursor:pointer;
+  box-shadow:0 1px 4px rgba(0,0,0,0.2);
+}
+.slider-labels{display:flex;justify-content:space-between;margin-top:10px}
+.slider-labels span{font-size:12px;color:var(--ink-faint)}
+
+/* ── Actions ── */
+.q-actions{margin-top:auto;padding-top:24px;display:flex;align-items:center;justify-content:space-between}
+.btn-next{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--ink);color:var(--bg);
+  border:none;padding:13px 26px;border-radius:30px;
+  font-family:'Inter',sans-serif;font-size:14px;font-weight:500;
+  cursor:pointer;transition:transform 0.15s,opacity 0.15s;
+}
+.btn-next:hover{transform:translateY(-1px)}
+.btn-next:disabled{opacity:0.35;pointer-events:none}
+.btn-next i{font-size:17px}
+.btn-back{
+  display:inline-flex;align-items:center;gap:6px;
+  background:none;border:1px solid var(--line);color:var(--ink-soft);
+  padding:11px 18px;border-radius:30px;
+  font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;
+  transition:all 0.15s;
+}
+.btn-back:hover{border-color:var(--ink-faint);color:var(--ink)}
+.btn-back i{font-size:15px}
+.skip-link{font-size:13px;color:var(--ink-faint);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.skip-link:hover{color:var(--ink-soft)}
+
+/* ── Upload screen ── */
+.upload-zone{
+  border:1.5px dashed var(--line);
+  border-radius:var(--r);
+  padding:40px 24px;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  background:var(--bg);
+  position:relative;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--ink-soft);background:var(--bg-warm)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{
+  width:52px;height:52px;border-radius:14px;
+  background:var(--bg-warm);border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px;
+}
+.upload-icon i{font-size:26px;color:var(--ink-soft)}
+.upload-title{font-family:'Fraunces',serif;font-size:19px;font-weight:500;margin-bottom:6px}
+.upload-sub{font-size:14px;color:var(--ink-faint)}
+.upload-types{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.utype{font-size:11px;font-weight:500;padding:4px 10px;border-radius:6px;background:var(--bg-warm);border:1px solid var(--line);color:var(--ink-faint)}
+
+.uploaded-files{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.file-item{
+  display:flex;align-items:center;gap:12px;
+  background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:11px 14px;
+}
+.file-icon{width:34px;height:34px;border-radius:8px;background:var(--finance-bg);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.file-icon i{font-size:18px;color:var(--finance)}
+.file-name{font-size:13px;font-weight:500;color:var(--ink);flex:1}
+.file-size{font-size:12px;color:var(--ink-faint)}
+.file-remove{background:none;border:none;color:var(--ink-faint);cursor:pointer;padding:4px;border-radius:6px;display:flex}
+.file-remove:hover{color:var(--ink);background:var(--bg-warm)}
+
+/* ── Profile card (final screen) ── */
+.profile-reveal{text-align:center;padding:8px 0}
+.profile-reveal .eyebrow{
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--legal);
+  margin-bottom:16px;
+}
+.profile-reveal h2{
+  font-family:'Fraunces',serif;font-size:clamp(26px,5vw,38px);
+  font-weight:500;line-height:1.1;letter-spacing:-0.02em;margin-bottom:6px;
+}
+.profile-reveal h2 em{font-style:italic;color:var(--ink-soft)}
+.profile-reveal .lede{font-size:15px;color:var(--ink-soft);margin-bottom:28px}
+
+.pcard{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:24px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.03),0 12px 40px rgba(22,24,29,0.05);
+  text-align:left;margin-bottom:24px;
+}
+.pcard-top{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--line-soft)}
+.pcard-logo{
+  width:48px;height:48px;border-radius:13px;
+  background:var(--ink);color:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fraunces',serif;font-size:20px;font-weight:600;
+  flex-shrink:0;
+}
+.pcard-name{font-family:'Fraunces',serif;font-size:20px;font-weight:600}
+.pcard-industry{font-size:13px;color:var(--ink-faint);margin-top:2px}
+.pcard-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pcard-field{}
+.pfield-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:3px}
+.pfield-val{font-size:14px;font-weight:500;color:var(--ink)}
+
+.board-ready{
+  display:flex;align-items:center;gap:10px;
+  background:var(--legal-bg);border:1px solid #cde6db;
+  border-radius:var(--r-sm);padding:13px 16px;margin-bottom:20px;
+}
+.board-ready i{font-size:18px;color:var(--legal);flex-shrink:0}
+.board-ready-text{font-size:13.5px;color:var(--legal-deep);font-weight:500}
+
+.advisor-row{display:flex;justify-content:center;gap:14px;margin-bottom:24px}
+.advisor-mini{display:flex;flex-direction:column;align-items:center;gap:6px}
+.advisor-mini .ring{border-radius:50%;overflow:hidden;border:2px solid var(--card);box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.advisor-mini span{font-size:11px;color:var(--ink-faint);font-weight:500}
+
+.btn-full{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;background:var(--ink);color:var(--bg);
+  border:none;padding:15px;border-radius:30px;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:500;
+  cursor:pointer;transition:transform 0.15s;
+}
+.btn-full:hover{transform:translateY(-1px)}
+.btn-full i{font-size:19px}
+
+/* ── Export loading state ── */
+.btn-next.loading{opacity:0.6;pointer-events:none}
+.btn-next.loading i{animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* ── Transitions ── */
+.screen{display:none}
+.screen.active{display:flex;flex-direction:column;flex:1;animation:fadeUp 0.4s cubic-bezier(0.16,1,0.3,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- SVG character definitions (same as boardroom-app) -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="char-legal" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="50" fill="#e4f2ec"/>
+      <path d="M22 100 Q22 74 50 74 Q78 74 78 100 Z" fill="#0f7a5e"/>
+      <path d="M40 72 h20 v8 q-10 6 -20 0 Z" fill="#e8b894"/>
+      <ellipse cx="50" cy="50" rx="19" ry="22" fill="#e8b894"/>
+      <path d="M30 44 Q30 24 50 24 Q70 24 70 44 Q70 36 50 34 Q30 36 30 44 Z" fill="#b8b3a8"/>
+      <rect x="34" y="47" width="13" height="10" rx="5" fill="none" stroke="#0a4f3d" stroke-width="1.6"/>
+      <rect x="53" y="47" width="13" height="10" rx="5" fill="none" stroke="#0a4f3d" stroke-width="1.6"/>
+      <line x1="47" y1="51" x2="53" y2="51" stroke="#0a4f3d" stroke-width="1.6"/>
+      <circle cx="40.5" cy="52" r="2" fill="#16181d"/>
+      <circle cx="59.5" cy="52" r="2" fill="#16181d"/>
+      <path d="M44 64 Q50 62 56 64" stroke="#9c6b4a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="char-finance" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="50" fill="#e7f0fa"/>
+      <path d="M22 100 Q22 74 50 74 Q78 74 78 100 Z" fill="#1f5fa8"/>
+      <path d="M40 72 h20 v8 q-10 6 -20 0 Z" fill="#d9a273"/>
+      <path d="M50 74 L45 80 L50 100 L55 80 Z" fill="#0c4178"/>
+      <ellipse cx="50" cy="50" rx="19" ry="22" fill="#d9a273"/>
+      <path d="M31 42 Q31 25 50 25 Q69 25 69 42 L66 40 Q64 32 50 32 Q36 32 34 40 Z" fill="#2b2620"/>
+      <circle cx="41" cy="51" r="2.1" fill="#16181d"/>
+      <circle cx="59" cy="51" r="2.1" fill="#16181d"/>
+      <path d="M44 64 L56 63" stroke="#9c6b4a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="char-market" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="50" fill="#eee9fa"/>
+      <path d="M22 100 Q22 73 50 73 Q78 73 78 100 Z" fill="#6f4bce"/>
+      <path d="M40 71 h20 v8 q-10 6 -20 0 Z" fill="#f0c39a"/>
+      <ellipse cx="50" cy="49" rx="19" ry="22" fill="#f0c39a"/>
+      <path d="M30 46 Q28 22 50 22 Q72 22 70 46 Q68 30 58 28 Q56 24 48 26 Q38 26 36 32 Q31 34 30 46 Z" fill="#3a2f1a"/>
+      <circle cx="41" cy="50" r="2.2" fill="#16181d"/>
+      <circle cx="59" cy="50" r="2.2" fill="#16181d"/>
+      <path d="M42 61 Q50 69 58 61 Q50 64 42 61 Z" fill="#9c4a3a"/>
+    </symbol>
+    <symbol id="char-customer" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="50" fill="#faeae1"/>
+      <path d="M22 100 Q22 73 50 73 Q78 73 78 100 Z" fill="#c5512a"/>
+      <path d="M40 71 h20 v8 q-10 6 -20 0 Z" fill="#c98a5e"/>
+      <ellipse cx="50" cy="49" rx="19" ry="22" fill="#c98a5e"/>
+      <path d="M31 44 Q31 23 50 23 Q69 23 69 44 Q66 30 50 30 Q34 30 31 44 Z" fill="#1f1812"/>
+      <circle cx="41" cy="50" r="2.2" fill="#16181d"/>
+      <circle cx="59" cy="50" r="2.2" fill="#16181d"/>
+      <path d="M42 61 Q50 68 58 61" stroke="#9c4a3a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark"><i class="ti ti-gavel"></i></div>
+    <div class="brand-name">Board<span>room</span></div>
+  </div>
+  <div class="topbar-right">Setting up your board</div>
+</div>
+
+<div class="shell">
+
+  <!-- Progress bar (shared across all Q screens) -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-top">
+      <span class="progress-label">Onboarding</span>
+      <span class="progress-step" id="step-label">1 of 8</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill" style="width:14.3%"></div>
+    </div>
+    <div class="step-dots" id="step-dots"></div>
+  </div>
+
+  <!-- ════ SCREEN 1 — Company name + city + what you do ════ -->
+  <div class="screen active" id="s1">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 1</div>
+      <h2 class="q-title">Tell us about your company</h2>
+      <p class="q-hint">Your board needs to know the business and where it operates before they can advise it.</p>
+      <input class="q-input" id="q1-name" type="text" placeholder="Company name" style="margin-bottom:10px" oninput="checkQ1()">
+      <input class="q-input" id="q1-city" type="text" placeholder="City (e.g. Riyadh, Jeddah, Dammam)" style="margin-bottom:10px" oninput="checkQ1()">
+      <textarea class="q-input" id="q1-what" rows="3" placeholder="What does your business do? (e.g. We run a logistics company serving corporate clients in Riyadh)" oninput="checkQ1()"></textarea>
+      <div class="q-actions">
+        <span></span>
+        <button class="btn-next" id="next1" onclick="goTo(2)" disabled><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 2 — Industry ════ -->
+  <div class="screen" id="s2">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 2</div>
+      <h2 class="q-title">Which industry best describes your business?</h2>
+      <p class="q-hint">Your advisors tailor their knowledge to your sector.</p>
+      <div class="options" id="q2-opts">
+        <div class="opt" onclick="selectOpt('q2',this,'Retail & E-commerce'); hideOtherIndustry()">
+          <span class="opt-icon">🛒</span><div class="opt-text"><div class="opt-label">Retail & E-commerce</div><div class="opt-desc">Physical stores, online shops, product sales</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Logistics & Supply Chain'); hideOtherIndustry()">
+          <span class="opt-icon">🚚</span><div class="opt-text"><div class="opt-label">Logistics & Supply Chain</div><div class="opt-desc">Transportation, warehousing, delivery</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Technology & SaaS'); hideOtherIndustry()">
+          <span class="opt-icon">💻</span><div class="opt-text"><div class="opt-label">Technology & SaaS</div><div class="opt-desc">Software, apps, digital products</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Food & Hospitality'); hideOtherIndustry()">
+          <span class="opt-icon">🍽️</span><div class="opt-text"><div class="opt-label">Food & Hospitality</div><div class="opt-desc">Restaurants, catering, hotels</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Professional Services'); hideOtherIndustry()">
+          <span class="opt-icon">📋</span><div class="opt-text"><div class="opt-label">Professional Services</div><div class="opt-desc">Consulting, legal, accounting</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Construction & Real Estate'); hideOtherIndustry()">
+          <span class="opt-icon">🏗️</span><div class="opt-text"><div class="opt-label">Construction & Real Estate</div><div class="opt-desc">Contracting, property, development</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Healthcare & Clinics'); hideOtherIndustry()">
+          <span class="opt-icon">🏥</span><div class="opt-text"><div class="opt-label">Healthcare & Clinics</div><div class="opt-desc">Medical services, pharmacies, wellness</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q2',this,'Other'); showOtherIndustry()">
+          <span class="opt-icon">📦</span><div class="opt-text"><div class="opt-label">Other</div><div class="opt-desc">Tell us your industry below</div></div><span class="opt-radio"></span>
+        </div>
+      </div>
+      <div id="other-industry-wrap" style="display:none;margin-top:12px">
+        <input class="q-input" id="other-industry-input" type="text" placeholder="Type your industry (e.g. Automotive, Education, Agriculture...)" oninput="setOtherIndustry(this.value)">
+      </div>
+      <div class="q-actions">
+        <button class="btn-back" onclick="goTo(1)"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn-next" id="next2" onclick="goTo(3)" disabled><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 3 — Team size ════ -->
+  <div class="screen" id="s3">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 3</div>
+      <h2 class="q-title">How big is your team?</h2>
+      <p class="q-hint">Team size affects Nitaqat ratios, HR obligations, and how your advisors frame their recommendations.</p>
+      <div class="options" id="q3-size">
+        <div class="opt" onclick="selectOpt('q3a',this,'1–10 employees')">
+          <div class="opt-text"><div class="opt-label">1–10 employees</div><div class="opt-desc">Early stage, founder-led</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q3a',this,'11–50 employees')">
+          <div class="opt-text"><div class="opt-label">11–50 employees</div><div class="opt-desc">Growing team</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q3a',this,'51–200 employees')">
+          <div class="opt-text"><div class="opt-label">51–200 employees</div><div class="opt-desc">Established business</div></div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q3a',this,'200+ employees')">
+          <div class="opt-text"><div class="opt-label">200+ employees</div><div class="opt-desc">Mid to large company</div></div><span class="opt-radio"></span>
+        </div>
+      </div>
+      <div class="q-actions">
+        <button class="btn-back" onclick="goTo(2)"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn-next" id="next3" onclick="goTo(4)" disabled><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 4 — Revenue ════ -->
+  <div class="screen" id="s4">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 4</div>
+      <h2 class="q-title">What is your approximate monthly revenue?</h2>
+      <p class="q-hint">The Finance advisor uses this to calculate margins, runway, and financial viability.</p>
+      <div class="slider-wrap">
+        <div class="slider-val" id="rev-val">300,000 SAR / month</div>
+        <input class="q-slider" type="range" min="0" max="10" value="3" id="rev-slider" oninput="updateRevenue(this.value)">
+        <div class="slider-labels">
+          <span>Under 50K</span>
+          <span>500K+</span>
+          <span>1M+</span>
+        </div>
+      </div>
+      <div class="q-actions">
+        <button class="btn-back" onclick="goTo(3)"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn-next" onclick="goTo(5)"><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 5 — Risk tolerance ════ -->
+  <div class="screen" id="s5">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 5</div>
+      <h2 class="q-title">How does your company approach risk?</h2>
+      <p class="q-hint">This shapes how your board weighs caution against opportunity in every debate.</p>
+      <div class="options" id="q5-opts">
+        <div class="opt" onclick="selectOpt('q5',this,'conservative')">
+          <span class="opt-icon" style="font-size:22px">🛡️</span>
+          <div class="opt-text">
+            <div class="opt-label">Conservative</div>
+            <div class="opt-desc">We prefer stability. We move carefully and protect what we have built.</div>
+          </div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q5',this,'moderate')">
+          <span class="opt-icon" style="font-size:22px">⚖️</span>
+          <div class="opt-text">
+            <div class="opt-label">Moderate</div>
+            <div class="opt-desc">We balance growth and caution. We take calculated risks with clear upside.</div>
+          </div><span class="opt-radio"></span>
+        </div>
+        <div class="opt" onclick="selectOpt('q5',this,'aggressive')">
+          <span class="opt-icon" style="font-size:22px">🚀</span>
+          <div class="opt-text">
+            <div class="opt-label">Aggressive</div>
+            <div class="opt-desc">We move fast and take bold bets. Speed and growth matter most.</div>
+          </div><span class="opt-radio"></span>
+        </div>
+      </div>
+      <div class="q-actions">
+        <button class="btn-back" onclick="goTo(4)"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn-next" id="next5" onclick="goTo(6)" disabled><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 6 — Biggest challenges ════ -->
+  <div class="screen" id="s6">
+    <div class="q-card">
+      <div class="q-eyebrow">Question 6</div>
+      <h2 class="q-title">What are your biggest challenges right now?</h2>
+      <p class="q-hint">Pick all that apply. Your board will pay extra attention to these areas.</p>
+      <div class="chip-grid" id="q6-chips">
+        <span class="chip" onclick="toggleChip(this,'Cash flow')">Cash flow</span>
+        <span class="chip" onclick="toggleChip(this,'Hiring & HR')">Hiring & HR</span>
+        <span class="chip" onclick="toggleChip(this,'Expanding to new cities')">Expanding to new cities</span>
+        <span class="chip" onclick="toggleChip(this,'Client retention')">Client retention</span>
+        <span class="chip" onclick="toggleChip(this,'Regulatory compliance')">Regulatory compliance</span>
+        <span class="chip" onclick="toggleChip(this,'Pricing strategy')">Pricing strategy</span>
+        <span class="chip" onclick="toggleChip(this,'Competition')">Competition</span>
+        <span class="chip" onclick="toggleChip(this,'Supplier issues')">Supplier issues</span>
+        <span class="chip" onclick="toggleChip(this,'Digital transformation')">Digital transformation</span>
+        <span class="chip" onclick="toggleChip(this,'Profit margins')">Profit margins</span>
+        <span class="chip" onclick="toggleChip(this,'Finding new clients')">Finding new clients</span>
+        <span class="chip" onclick="toggleChip(this,'Operations & processes')">Operations & processes</span>
+      </div>
+      <div class="q-actions">
+        <button class="btn-back" onclick="goTo(5)"><i class="ti ti-arrow-left"></i> Back</button>
+        <button class="btn-next" id="next6" onclick="goTo(7)" disabled><i class="ti ti-arrow-right"></i> Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 7 — Document upload ════ -->
+  <div class="screen" id="s7">
+    <div class="q-card">
+      <div class="q-eyebrow">Final step</div>
+      <h2 class="q-title">Give your board the full picture</h2>
+      <p class="q-hint" style="margin-bottom:20px">Upload company documents so your advisors speak in your actual numbers, not estimates. This step is optional but makes advice dramatically more specific.</p>
+
+      <div class="upload-zone" id="drop-zone"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <input type="file" multiple accept=".pdf,.docx,.xlsx,.txt" onchange="handleFiles(this.files)">
+        <div class="upload-icon"><i class="ti ti-cloud-upload"></i></div>
+        <div class="upload-title">Drop your files here</div>
+        <div class="upload-sub">or click to browse your device</div>
+        <div class="upload-types">
+          <span class="utype">PDF</span>
+          <span class="utype">DOCX</span>
+          <span class="utype">XLSX</span>
+          <span class="utype">TXT</span>
+        </div>
+      </div>
+
+      <div class="uploaded-files" id="file-list"></div>
+
+      <div style="margin-top:14px;padding:11px 14px;background:var(--bg-warm);border-radius:var(--r-sm);font-size:13px;color:var(--ink-faint);display:flex;gap:9px;align-items:flex-start">
+        <i class="ti ti-lock" style="font-size:16px;margin-top:1px;flex-shrink:0"></i>
+        <span>Documents are used only to ground your board's advice. They are never stored or shared.</span>
+      </div>
+
+      <div class="q-actions" style="padding-top:20px">
+        <button class="btn-back" onclick="goTo(6)"><i class="ti ti-arrow-left"></i> Back</button>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+          <button class="btn-next" id="btn-build" onclick="exportOnboarding()"><i class="ti ti-download"></i> Build my board</button>
+          <span class="skip-link" onclick="goTo(8)">Skip — use answers only</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ SCREEN 8 — Profile reveal ════ -->
+  <div class="screen" id="s8">
+    <div class="q-card" style="text-align:center">
+      <div style="width:56px;height:56px;border-radius:16px;background:var(--legal-bg);display:flex;align-items:center;justify-content:center;margin:0 auto 18px">
+        <i class="ti ti-circle-check" style="font-size:28px;color:var(--legal)"></i>
+      </div>
+      <p style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--legal);margin-bottom:14px">Your board is ready</p>
+      <h2 style="font-family:'Fraunces',serif;font-size:clamp(24px,4vw,34px);font-weight:500;line-height:1.1;letter-spacing:-0.02em;margin-bottom:8px">They know your business.<br><em style="font-style:italic;color:var(--ink-soft)">Now ask them anything.</em></h2>
+      <p style="font-size:14px;color:var(--ink-faint);margin-bottom:28px">Your profile is built. Four advisors are briefed and waiting.</p>
+
+      <div class="pcard" id="profile-card">
+        <div class="pcard-top">
+          <div class="pcard-logo" id="pcard-logo">A</div>
+          <div>
+            <div class="pcard-name" id="pcard-name">Al-Noor Logistics</div>
+            <div class="pcard-industry" id="pcard-industry">Logistics & Supply Chain · Riyadh</div>
+          </div>
+        </div>
+        <div class="pcard-grid">
+          <div class="pcard-field">
+            <div class="pfield-label">Team size</div>
+            <div class="pfield-val" id="pf-size">11–50 employees</div>
+          </div>
+          <div class="pcard-field">
+            <div class="pfield-label">Monthly revenue</div>
+            <div class="pfield-val" id="pf-rev">300,000 SAR</div>
+          </div>
+          <div class="pcard-field">
+            <div class="pfield-label">Risk tolerance</div>
+            <div class="pfield-val" id="pf-risk">Moderate</div>
+          </div>
+          <div class="pcard-field">
+            <div class="pfield-label">Documents</div>
+            <div class="pfield-val" id="pf-docs">0 uploaded</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="board-ready">
+        <i class="ti ti-users"></i>
+        <span class="board-ready-text">Your four advisors have been briefed on your business</span>
+      </div>
+
+      <div class="advisor-row">
+        <div class="advisor-mini"><svg class="ring" width="48" height="48"><use href="#char-legal"/></svg><span>Legal</span></div>
+        <div class="advisor-mini"><svg class="ring" width="48" height="48"><use href="#char-finance"/></svg><span>Finance</span></div>
+        <div class="advisor-mini"><svg class="ring" width="48" height="48"><use href="#char-market"/></svg><span>Marketing</span></div>
+        <div class="advisor-mini"><svg class="ring" width="48" height="48"><use href="#char-customer"/></svg><span>Customer</span></div>
+      </div>
+
+      <button class="btn-full" onclick="window.location.href = APP_URL"><i class="ti ti-arrow-right"></i> Convene the board</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const TOTAL = 7;
+const answers = {q1_name:'',q1_what:'',q2:'',q3a:'',q3_city:'',revenue:'300,000 SAR',q5:'',q6:[],q7:'',docs:0};
+const revLabels = ['Under 50K SAR','50,000 SAR','100,000 SAR','200,000 SAR','300,000 SAR','500,000 SAR','700,000 SAR','1,000,000 SAR','1,500,000 SAR','2,000,000 SAR','2,000,000+ SAR'];
+
+let currentStep = 1;
+
+function buildDots(){
+  const c = document.getElementById('step-dots');
+  c.innerHTML='';
+  for(let i=1;i<=TOTAL;i++){
+    const d=document.createElement('span');
+    d.className='sdot'+(i===currentStep?' active':i<currentStep?' done':'');
+    c.appendChild(d);
+  }
+}
+
+function goTo(n){
+  document.getElementById('s'+currentStep).classList.remove('active');
+  currentStep=n;
+  const el=document.getElementById('s'+n);
+  if(el){el.classList.add('active');}
+  const pw=document.getElementById('progress-wrap');
+  if(n===8){pw.style.display='none';}
+  else{
+    pw.style.display='block';
+    document.getElementById('step-label').textContent=n+' of 7';
+    document.getElementById('progress-fill').style.width=((n/TOTAL)*100)+'%';
+    buildDots();
+  }
+  if(n===8) buildProfile();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function selectOpt(key,el,val){
+  const parent=el.parentElement;
+  parent.querySelectorAll('.opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  answers[key]=val;
+  const map={q2:'next2',q3a:'next3',q5:'next5'};
+  if(map[key]){document.getElementById(map[key]).disabled=false;}
+}
+
+function checkQ1(){
+  const n=document.getElementById('q1-name').value.trim();
+  const c=document.getElementById('q1-city').value.trim();
+  const w=document.getElementById('q1-what').value.trim();
+  answers.q1_name=n; answers.q1_city_q1=c; answers.q1_what=w;
+  document.getElementById('next1').disabled=!(n&&c&&w);
+}
+
+function checkQ3(){
+  document.getElementById('next3').disabled=!answers.q3a;
+}
+
+function updateRevenue(v){
+  const label=revLabels[parseInt(v)]||'';
+  document.getElementById('rev-val').textContent=label+' / month';
+  answers.revenue=label;
+}
+
+function hideOtherIndustry(){
+  const wrap = document.getElementById('other-industry-wrap');
+  wrap.style.display = 'none';
+  document.getElementById('other-industry-input').value = '';
+}
+
+function showOtherIndustry(){
+  const wrap = document.getElementById('other-industry-wrap');
+  wrap.style.display = 'block';
+  document.getElementById('next2').disabled = true;
+  document.getElementById('other-industry-input').focus();
+}
+
+function setOtherIndustry(val){
+  answers.q2 = val.trim();
+  document.getElementById('next2').disabled = !val.trim();
+}
+
+function toggleChip(el,val){
+  el.classList.toggle('selected');
+  if(el.classList.contains('selected')){answers.q6.push(val);}
+  else{answers.q6=answers.q6.filter(x=>x!==val);}
+  document.getElementById('next6').disabled=answers.q6.length===0;
+}
+
+function handleFiles(files){
+  answers.docs=files.length;
+  renderFiles(files);
+}
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const files=e.dataTransfer.files;
+  answers.docs=files.length;
+  renderFiles(files);
+}
+let uploadedFiles = [];
+
+function renderFiles(files){
+  const newFiles = Array.from(files);
+  newFiles.forEach(f => { f._label = ''; uploadedFiles.push(f); });
+  answers.docs = uploadedFiles.length;
+  buildFileList();
+}
+
+function buildFileList(){
+  const list=document.getElementById('file-list');
+  list.innerHTML='';
+  uploadedFiles.forEach((f,i)=>{
+    const size=(f.size/1024)<1000?Math.round(f.size/1024)+'KB':Math.round(f.size/1048576*10)/10+'MB';
+    const ext=f.name.split('.').pop().toUpperCase();
+    const iconMap={PDF:'ti-file-type-pdf',DOCX:'ti-file-type-doc',XLSX:'ti-file-type-xls',TXT:'ti-file-type-txt'};
+    const ic=iconMap[ext]||'ti-file';
+    const label = uploadedFiles[i]._label || '';
+    list.innerHTML+=`
+    <div class="file-item" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="file-icon"><i class="ti ${ic}"></i></div>
+        <span class="file-name" style="flex:1">${f.name}</span>
+        <span class="file-size">${size}</span>
+        <button class="file-remove" onclick="removeFile(${i})"><i class="ti ti-x"></i></button>
+      </div>
+      <input
+        class="q-input"
+        style="font-size:13px;padding:9px 12px;margin-top:2px"
+        placeholder="Label this document (e.g. Financial report Q1 2026, Vendor contract, HR policy)"
+        value="${label}"
+        oninput="setFileLabel(${i}, this.value)"
+      >
+    </div>`;
+  });
+}
+
+function setFileLabel(i, val){
+  if(uploadedFiles[i]) uploadedFiles[i]._label = val;
+}
+
+function removeFile(i){
+  uploadedFiles.splice(i,1);
+  answers.docs = uploadedFiles.length;
+  buildFileList();
+}
+
+const API_URL = 'http://localhost:8000';
+const APP_URL = 'http://localhost:8000/app';
+
+function buildOnboardingPayload(){
+  return {
+    session_id: crypto.randomUUID(),
+    business_name: answers.q1_name   || '',
+    city:          answers.q1_city_q1 || '',
+    description:   answers.q1_what   || '',
+    industry:      answers.q2        || '',
+    team_size:     answers.q3a       || '',
+    revenue:       answers.revenue   || '',
+    risk_tolerance:answers.q5        || '',
+    challenges:    answers.q6        || [],
+    documents: uploadedFiles.map(f => ({
+      label:    f._label || '',
+      filename: f.name
+    }))
+  };
+}
+
+async function exportOnboarding(){
+  const btn = document.getElementById('btn-build');
+  btn.classList.add('loading');
+  btn.innerHTML = '<i class="ti ti-loader"></i> Building your board...';
+
+  try {
+    const profile = buildOnboardingPayload();
+
+    const form = new FormData();
+    form.append('profile', JSON.stringify(profile));
+    uploadedFiles.forEach(f => form.append('files', f, f.name));
+
+    const res = await fetch(`${API_URL}/onboard`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+
+    goTo(8);
+
+  } catch(err){
+    console.error('Onboard failed:', err);
+    alert(`Could not reach the board: ${err.message}\n\nMake sure the server is running on ${API_URL}`);
+    btn.classList.remove('loading');
+    btn.innerHTML = '<i class="ti ti-arrow-right"></i> Build my board';
+  }
+}
+
+function buildProfile(){
+  const name=answers.q1_name||'Your Company';
+  document.getElementById('pcard-logo').textContent=name[0].toUpperCase();
+  document.getElementById('pcard-name').textContent=name;
+  const city=answers.q1_city_q1||answers.q3_city||''; document.getElementById('pcard-industry').textContent=(answers.q2||'Business')+(city?' · '+city:'');
+  document.getElementById('pf-size').textContent=answers.q3a||'—';
+  document.getElementById('pf-rev').textContent=answers.revenue||'—';
+  document.getElementById('pf-risk').textContent=answers.q5||'Moderate';
+  document.getElementById('pf-docs').textContent=answers.docs>0?answers.docs+' uploaded':'None';
+}
+
+buildDots();
+</script>
+</body>
+</html>

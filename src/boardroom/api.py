@@ -1,7 +1,12 @@
 """Live board API for the presentation UI.
 
-Wraps run_board() in a FastAPI endpoint so the frontend can ask its own
-business decision and get a real, freshly-generated debate back.
+The UI runs the board ROUND BY ROUND so the user can inject context between
+rounds (the "pause & add during the session" interaction):
+
+    POST /api/discover  → discovery questions (chat)
+    POST /api/round     → SSE; streams each advisor's perspective as it lands
+    POST /api/verdict   → the chairman's synthesis
+    POST /api/board     → one-shot full run (export / quick path)
 
 Run it:
     PYTHONPATH=src python -m uvicorn boardroom.api:app --reload --port 8000
@@ -12,6 +17,7 @@ import asyncio
 import contextlib
 import json as _json
 import sys
+from typing import List, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,13 +26,18 @@ from pydantic import BaseModel
 
 import boardroom.advisors  # ensure advisors are registered
 from boardroom.board import (
-    _chairman_synthesize,
-    _format_round1,
+    chairman_synthesize,
     discover_questions,
+    round2_context,
     run_board,
 )
 from boardroom.registry import get_advisors
-from boardroom.schema import BoardResult, DiscoveryResult
+from boardroom.schema import (
+    AdvisorResponse,
+    BoardResult,
+    ChairmanVerdict,
+    DiscoveryResult,
+)
 
 app = FastAPI(title="AI Board Room API")
 
@@ -46,7 +57,23 @@ class BoardRequest(BaseModel):
     decision: str
     context: str = ""
     lang: str = "en"   # "en" | "ar" — language the board should respond in
-    fast: bool = False  # skip Round 2 for ~2x speed
+    fast: bool = False  # one-shot /api/board only: skip Round 2
+
+
+class RoundRequest(BaseModel):
+    decision: str
+    context: str = ""
+    lang: str = "en"
+    round: int = 1                                  # 1 or 2
+    prior: List[AdvisorResponse] = []              # round-1 results, when round == 2
+
+
+class VerdictRequest(BaseModel):
+    decision: str
+    context: str = ""
+    lang: str = "en"
+    round1: List[AdvisorResponse] = []
+    round2: List[AdvisorResponse] = []
 
 
 @app.get("/api/health")
@@ -61,61 +88,26 @@ def discover(req: BoardRequest) -> DiscoveryResult:
         return discover_questions(req.decision, language=language)
 
 
-@app.post("/api/board", response_model=BoardResult)
-def board(req: BoardRequest) -> BoardResult:
-    language = _LANGUAGES.get(req.lang, "English")
-    with contextlib.redirect_stdout(sys.stderr):
-        return run_board(req.decision, req.context, language=language, fast=req.fast)
-
-
-@app.post("/api/board/stream")
-async def board_stream(req: BoardRequest) -> StreamingResponse:
-    """SSE endpoint — yields each advisor response as it completes so the
-    UI can show progressive results instead of waiting for all 7 LLM calls."""
+@app.post("/api/round")
+async def round_stream(req: RoundRequest) -> StreamingResponse:
+    """SSE — run one round, streaming each advisor's perspective as it completes."""
     language = _LANGUAGES.get(req.lang, "English")
     advisors = get_advisors()
 
+    if req.round == 2:
+        ctx = round2_context(req.prior, req.context)
+    else:
+        ctx = req.context
+
     async def generate():
         loop = asyncio.get_event_loop()
-
-        # ── Round 1: all in parallel, yield as each finishes ─────────────
-        r1_tasks = [
-            loop.run_in_executor(None, adv.analyze, req.decision, req.context or "", language)
+        tasks = [
+            loop.run_in_executor(None, adv.analyze, req.decision, ctx, language)
             for adv in advisors
         ]
-        round1 = []
-        for coro in asyncio.as_completed(r1_tasks):
+        for coro in asyncio.as_completed(tasks):
             result = await coro
-            round1.append(result)
-            yield f"data: {_json.dumps({'type': 'r1', 'data': result.model_dump()})}\n\n"
-
-        # ── Round 2 (skip in fast mode) ───────────────────────────────────
-        if not req.fast:
-            others = _format_round1(round1)
-
-            def _r2(adv):
-                ctx = (
-                    "ROUND 2: Challenge a specific advisor by name. "
-                    "No repeating Round 1. Max 3 sentences.\n\n"
-                    f"Round 1 arguments:\n{others}\n\n"
-                    f"Company context:\n{req.context or 'None.'}"
-                )
-                return adv.analyze(req.decision, context=ctx, language=language)
-
-            r2_tasks = [loop.run_in_executor(None, _r2, adv) for adv in advisors]
-            round2 = []
-            for coro in asyncio.as_completed(r2_tasks):
-                result = await coro
-                round2.append(result)
-                yield f"data: {_json.dumps({'type': 'r2', 'data': result.model_dump()})}\n\n"
-        else:
-            round2 = round1
-
-        # ── Chairman ──────────────────────────────────────────────────────
-        verdict = await loop.run_in_executor(
-            None, _chairman_synthesize, req.decision, round1, round2, language
-        )
-        yield f"data: {_json.dumps({'type': 'verdict', 'data': verdict.model_dump()})}\n\n"
+            yield f"data: {_json.dumps({'type': 'advisor', 'data': result.model_dump()})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -123,3 +115,18 @@ async def board_stream(req: BoardRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/verdict", response_model=ChairmanVerdict)
+def verdict(req: VerdictRequest) -> ChairmanVerdict:
+    language = _LANGUAGES.get(req.lang, "English")
+    round2 = req.round2 or req.round1
+    with contextlib.redirect_stdout(sys.stderr):
+        return chairman_synthesize(req.decision, req.round1, round2, language=language)
+
+
+@app.post("/api/board", response_model=BoardResult)
+def board(req: BoardRequest) -> BoardResult:
+    language = _LANGUAGES.get(req.lang, "English")
+    with contextlib.redirect_stdout(sys.stderr):
+        return run_board(req.decision, req.context, language=language, fast=req.fast)

@@ -5,8 +5,9 @@ import { AdvisorIcon } from "./components/Icons.jsx";
 import {
   cannedSession,
   runDiscover,
-  runLiveBoard,
-  streamBoard,
+  streamRound,
+  runVerdict,
+  buildLiveSession,
   deriveTensions,
   loadSaved,
   saveSession,
@@ -35,12 +36,12 @@ import {
   IconBolt,
   IconLoader2,
   IconScale,
+  IconCheck,
+  IconBulb,
+  IconSend,
 } from "@tabler/icons-react";
 
-// ── PACING CONSTANTS (tune live during rehearsal) ───────────────────────────
-const TYPING_MS = 2000;
-const REVEAL_SPEED = 40;
-const HOLD_MS = 4500;
+const HOLD_MS = 5000; // replay auto-advance dwell per speaker
 
 const TABS = [
   { id: "convene", label: UI.tabConvene, Icon: IconPencil },
@@ -49,6 +50,18 @@ const TABS = [
   { id: "verdict", label: UI.tabVerdict, Icon: IconCrown },
   { id: "tension", label: UI.tabTension, Icon: IconAffiliate },
 ];
+
+// Seats evenly around an ellipse (shared 0..100 space with the SVG lines).
+const ADV_LIST = Object.values(ADVISORS);
+const SEATS = (() => {
+  const cx = 50, cy = 47, rx = 37, ry = 32, n = ADV_LIST.length;
+  const m = {};
+  ADV_LIST.forEach((a, i) => {
+    const ang = ((-90 + (i * 360) / n) * Math.PI) / 180;
+    m[a.id] = { x: cx + rx * Math.cos(ang), y: cy + ry * Math.sin(ang) };
+  });
+  return m;
+})();
 
 export default function App() {
   const [lang, setLang] = useState("en");
@@ -64,14 +77,24 @@ export default function App() {
   const [tab, setTab] = useState("convene");
   const [session, setSession] = useState(cannedSession);
   const [saved, setSaved] = useState(loadSaved);
+  // live: { decision, context } while a live run is in progress; null for replay.
+  const [live, setLive] = useState(null);
 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   }, [lang]);
 
-  const startSession = (s) => {
+  // Replay an existing session (demo / saved / imported).
+  const startReplay = (s) => {
+    setLive(null);
     setSession(s);
+    setTab("debate");
+  };
+
+  // Begin a live, round-by-round run.
+  const startLive = (decision, context) => {
+    setLive({ decision, context: context || "" });
     setTab("debate");
   };
 
@@ -86,18 +109,30 @@ export default function App() {
             lang={lang}
             saved={saved}
             setSaved={setSaved}
-            onStart={startSession}
+            onReplay={startReplay}
+            onLive={startLive}
           />
         )}
         {tab === "advisors" && <Advisors t={t} />}
-        {tab === "debate" && (
-          <Debate
-            t={t}
-            session={session}
-            setSaved={setSaved}
-            onVerdict={() => setTab("verdict")}
-          />
-        )}
+        {tab === "debate" &&
+          (live ? (
+            <LiveDebate
+              t={t}
+              lang={lang}
+              decision={live.decision}
+              baseContext={live.context}
+              onSessionReady={setSession}
+              setSaved={setSaved}
+              onVerdict={() => setTab("verdict")}
+            />
+          ) : (
+            <ReplayDebate
+              t={t}
+              session={session}
+              setSaved={setSaved}
+              onVerdict={() => setTab("verdict")}
+            />
+          ))}
         {tab === "verdict" && <Verdict t={t} session={session} />}
         {tab === "tension" && <Tension t={t} session={session} />}
       </main>
@@ -141,89 +176,67 @@ function Topbar({ t, tab, setTab, lang, setLang }) {
   );
 }
 
-// ── Convene ───────────────────────────────────────────────────────────────────
-// phase: "input" → "discovering" → "questioning" → "running" → (onStart)
-function Convene({ t, lang, saved, setSaved, onStart }) {
+// ── Convene (with discovery chat) ─────────────────────────────────────────────
+// phase: "input" → "discovering" → "chat"
+function Convene({ t, lang, saved, setSaved, onReplay, onLive }) {
   const [draft, setDraft] = useState("");
-  const [fast, setFast] = useState(false);
   const [phase, setPhase] = useState("input");
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState([]); // {q, a}
+  const [qIdx, setQIdx] = useState(0);
+  const [reply, setReply] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef(null);
+  const chatEndRef = useRef(null);
 
-  const busy = phase === "discovering" || phase === "running";
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [qIdx, phase]);
 
-  // Build context string from answered discovery questions.
-  const buildContext = (qs, ans) =>
-    qs
-      .map((q, i) => (ans[i]?.trim() ? `Q: ${q}\nA: ${ans[i].trim()}` : null))
-      .filter(Boolean)
+  const buildContext = (pairs) =>
+    pairs
+      .filter((p) => p.a.trim())
+      .map((p) => `Q: ${p.q}\nA: ${p.a.trim()}`)
       .join("\n\n");
 
-  // Step 1: user clicks "Ask the board" → load discovery questions.
-  const handleLiveClick = async () => {
+  const askBoard = async () => {
     const q = draft.trim();
-    if (!q || busy) return;
+    if (!q || phase !== "input") return;
     setError("");
     setPhase("discovering");
     try {
       const qs = await runDiscover(q, lang);
-      setQuestions(qs);
-      setAnswers({});
-      setPhase("questioning");
+      setQuestions(qs.length ? qs : []);
+      setAnswers([]);
+      setQIdx(0);
+      setPhase(qs.length ? "chat" : "input");
+      if (!qs.length) onLive(q, "");
     } catch {
-      // Discovery endpoint unavailable — fall back to straight board run.
-      await runBoard(q, "");
-    }
-  };
-
-  // Step 2a: user submits answers → run board with enriched context.
-  const handleConvene = async () => {
-    const q = draft.trim();
-    if (!q) return;
-    setPhase("running");
-    try {
-      const s = await runLiveBoard(q, lang, buildContext(questions, answers), fast);
-      onStart(s);
-    } catch {
-      setError(t(UI.apiError));
-      setPhase("questioning");
-    }
-  };
-
-  // Step 2b: skip discovery → run board without context.
-  const handleSkip = async () => {
-    const q = draft.trim();
-    if (!q) return;
-    setPhase("running");
-    try {
-      const s = await runLiveBoard(q, lang, "", fast);
-      onStart(s);
-    } catch {
-      setError(t(UI.apiError));
-      setPhase("questioning");
-    }
-  };
-
-  // Internal helper shared by both fallback paths.
-  const runBoard = async (q, ctx) => {
-    setPhase("running");
-    try {
-      const s = await runLiveBoard(q, lang, ctx, fast);
-      onStart(s);
-    } catch {
-      setError(t(UI.apiError));
+      // Discovery unavailable — go straight to the live board.
+      onLive(q, "");
       setPhase("input");
     }
   };
+
+  const sendReply = () => {
+    const a = reply.trim();
+    const pairs = [...answers, { q: questions[qIdx], a }];
+    setAnswers(pairs);
+    setReply("");
+    if (qIdx + 1 < questions.length) {
+      setQIdx(qIdx + 1);
+    } else {
+      onLive(draft.trim(), buildContext(pairs));
+    }
+  };
+
+  const skipRest = () => onLive(draft.trim(), buildContext(answers));
 
   const onImport = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const s = await readSessionFile(file);
-      onStart(s);
+      onReplay(await readSessionFile(file));
     } catch {
       setError("Invalid session file.");
     }
@@ -242,118 +255,79 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
         <p className="lede">{t(UI.heroLede)}</p>
 
         <div className="compose">
-          <div className="qbox">
-            <div className="qbox-label">{t(UI.decisionLabel)}</div>
-            <textarea
-              className="qbox-input"
-              rows={2}
-              value={draft}
-              placeholder={t(UI.questionPlaceholder)}
-              disabled={busy}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleLiveClick();
-              }}
+          {phase === "chat" ? (
+            <DiscoveryChat
+              t={t}
+              decision={draft}
+              questions={questions}
+              answers={answers}
+              qIdx={qIdx}
+              reply={reply}
+              setReply={setReply}
+              onSend={sendReply}
+              onSkip={skipRest}
+              chatEndRef={chatEndRef}
             />
-          </div>
-
-          {/* ── Discovery phase ── */}
-          {phase === "discovering" && (
-            <div className="discover-loading">
-              <IconLoader2 size={18} className="spin" />
-              <span>{t(UI.discoverLoading)}</span>
-            </div>
-          )}
-
-          {phase === "questioning" && questions.length > 0 && (
-            <div className="discover-panel">
-              <div className="discover-head">
-                <IconCrown size={16} className="discover-crown" />
-                <div>
-                  <div className="discover-title">{t(UI.discoverTitle)}</div>
-                  <div className="discover-lede">{t(UI.discoverLede)}</div>
-                </div>
-              </div>
-              <div className="discover-questions">
-                {questions.map((q, i) => (
-                  <div key={i} className="discover-q">
-                    <label className="dq-label">
-                      {q}
-                      <span className="dq-optional">{t(UI.discoverOptional)}</span>
-                    </label>
-                    <textarea
-                      className="dq-input"
-                      rows={2}
-                      value={answers[i] || ""}
-                      onChange={(e) =>
-                        setAnswers((a) => ({ ...a, [i]: e.target.value }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="discover-actions">
-                <button className="convene-btn" onClick={handleConvene}>
-                  <IconBolt size={17} /> {t(UI.discoverConvene)}
-                </button>
-                <button className="ghost-btn" onClick={handleSkip}>
-                  {t(UI.discoverSkip)}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {phase === "running" && (
-            <div className="discover-loading">
-              <IconLoader2 size={18} className="spin" />
-              <span>{t(UI.boardRunning)}</span>
-            </div>
-          )}
-
-          {/* Only show action buttons in "input" phase */}
-          {phase === "input" && (
+          ) : (
             <>
-              <div className="examples">
-                {EXAMPLES.map((ex, i) => (
-                  <button
-                    key={i}
-                    className="ex-chip"
-                    onClick={() => setDraft(t(ex.full))}
-                  >
-                    {t(ex.chip)}
-                  </button>
-                ))}
+              <div className="qbox">
+                <div className="qbox-label">{t(UI.decisionLabel)}</div>
+                <textarea
+                  className="qbox-input"
+                  rows={2}
+                  value={draft}
+                  placeholder={t(UI.questionPlaceholder)}
+                  disabled={phase === "discovering"}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) askBoard();
+                  }}
+                />
               </div>
 
-              <div className="convene-actions">
-                <button
-                  className="convene-btn"
-                  onClick={handleLiveClick}
-                  disabled={!draft.trim()}
-                >
-                  <IconBolt size={18} /> {t(UI.runLive)}
-                </button>
-                <button className="ghost-btn lg" onClick={() => onStart(cannedSession())}>
-                  <IconPlayerPlayFilled size={15} /> {t(UI.runDemo)}
-                </button>
-              </div>
-              <label className="fast-toggle">
-                <input
-                  type="checkbox"
-                  checked={fast}
-                  onChange={(e) => setFast(e.target.checked)}
-                />
-                <span className="fast-label">⚡ {t(UI.fastMode)}</span>
-              </label>
-              <p className="live-hint">{t(UI.liveHint)}</p>
+              {phase === "discovering" ? (
+                <div className="discover-loading">
+                  <IconLoader2 size={18} className="spin" />
+                  <span>{t(UI.discoverLoading)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="examples">
+                    {EXAMPLES.map((ex, i) => (
+                      <button
+                        key={i}
+                        className="ex-chip"
+                        onClick={() => setDraft(t(ex.full))}
+                      >
+                        {t(ex.chip)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="convene-actions">
+                    <button
+                      className="convene-btn"
+                      onClick={askBoard}
+                      disabled={!draft.trim()}
+                    >
+                      <IconBolt size={18} /> {t(UI.runLive)}
+                    </button>
+                    <button
+                      className="ghost-btn lg"
+                      onClick={() => onReplay(cannedSession())}
+                    >
+                      <IconPlayerPlayFilled size={15} /> {t(UI.runDemo)}
+                    </button>
+                  </div>
+                  <p className="live-hint">{t(UI.liveHint)}</p>
+                </>
+              )}
             </>
           )}
-
           {error && <p className="error-msg">{error}</p>}
         </div>
 
         <div className="seats">
-          {Object.values(ADVISORS).map((a) => (
+          {ADV_LIST.map((a) => (
             <div key={a.id} className="seat">
               <div
                 className="seat-av"
@@ -367,7 +341,6 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
         </div>
       </div>
 
-      {/* saved conversations */}
       <div className="saved-section">
         <div className="saved-head">
           <h3 className="saved-title">{t(UI.savedTitle)}</h3>
@@ -393,7 +366,7 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
                 </span>
                 <span className="saved-q">{t(s.decision)}</span>
                 <div className="saved-acts">
-                  <button className="mini-btn" onClick={() => onStart(s)}>
+                  <button className="mini-btn" onClick={() => onReplay(s)}>
                     {t(UI.load)}
                   </button>
                   <button
@@ -420,6 +393,61 @@ function Convene({ t, lang, saved, setSaved, onStart }) {
   );
 }
 
+function DiscoveryChat({ t, decision, questions, answers, qIdx, reply, setReply, onSend, onSkip, chatEndRef }) {
+  return (
+    <div className="chat">
+      <div className="chat-thread">
+        <div className="chat-row user">
+          <div className="bubble user">{decision}</div>
+        </div>
+        <div className="chat-row chair">
+          <div className="chair-av"><IconCrown size={15} /></div>
+          <div className="bubble chair">{t(UI.discoverIntro)}</div>
+        </div>
+        {questions.slice(0, qIdx + 1).map((q, i) => (
+          <div key={i}>
+            <div className="chat-row chair">
+              <div className="chair-av"><IconCrown size={15} /></div>
+              <div className="bubble chair">{q}</div>
+            </div>
+            {answers[i] && answers[i].a.trim() && (
+              <div className="chat-row user">
+                <div className="bubble user">{answers[i].a}</div>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+      <div className="chat-input">
+        <textarea
+          className="chat-textarea"
+          rows={1}
+          value={reply}
+          placeholder={t(UI.answerPlaceholder)}
+          onChange={(e) => setReply(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend();
+            }
+          }}
+        />
+        <button className="send-btn" onClick={onSend}>
+          {qIdx + 1 < questions.length ? (
+            <><IconSend size={16} /> {t(UI.send)}</>
+          ) : (
+            <><IconBolt size={16} /> {t(UI.discoverStart)}</>
+          )}
+        </button>
+      </div>
+      <button className="chat-skip" onClick={onSkip}>
+        {t(UI.discoverSkip)} →
+      </button>
+    </div>
+  );
+}
+
 // ── Advisors intro ────────────────────────────────────────────────────────────
 function Advisors({ t }) {
   return (
@@ -430,7 +458,7 @@ function Advisors({ t }) {
         <p className="lede">{t(UI.advLede)}</p>
       </div>
       <div className="advisor-grid">
-        {Object.values(ADVISORS).map((a) => (
+        {ADV_LIST.map((a) => (
           <div key={a.id} className="advisor-card" style={advVars(a)}>
             <div className="ac-banner">
               <div className="ac-avatar">
@@ -444,9 +472,7 @@ function Advisors({ t }) {
               <div className="ac-quote">“{t(a.quote)}”</div>
               <div className="ac-traits">
                 {t(a.traits).map((tr, i) => (
-                  <span key={i} className="trait">
-                    {tr}
-                  </span>
+                  <span key={i} className="trait">{tr}</span>
                 ))}
               </div>
             </div>
@@ -457,104 +483,367 @@ function Advisors({ t }) {
   );
 }
 
-// ── Debate (conversation theater) ─────────────────────────────────────────────
-function Debate({ t, session, setSaved, onVerdict }) {
+// ── Boardroom table (shared visual) ───────────────────────────────────────────
+function BoardTable({ t, byId, activeId, targetId }) {
+  const ids = ADV_LIST.map((a) => a.id);
+  const pairs = [];
+  for (let i = 0; i < ids.length; i++)
+    for (let j = i + 1; j < ids.length; j++) pairs.push([ids[i], ids[j]]);
+
+  return (
+    <div className="board-table">
+      <svg className="bt-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {pairs.map(([a, b], i) => (
+          <line
+            key={i}
+            x1={SEATS[a].x} y1={SEATS[a].y}
+            x2={SEATS[b].x} y2={SEATS[b].y}
+            className="bt-line"
+          />
+        ))}
+        {activeId && targetId && SEATS[activeId] && SEATS[targetId] && (
+          <line
+            x1={SEATS[activeId].x} y1={SEATS[activeId].y}
+            x2={SEATS[targetId].x} y2={SEATS[targetId].y}
+            className="bt-line active"
+            style={{ stroke: ADVISORS[activeId].accent }}
+          />
+        )}
+      </svg>
+      <div className="bt-surface">
+        <IconGavel size={26} />
+      </div>
+      {ADV_LIST.map((a) => {
+        const pos = SEATS[a.id];
+        const resp = byId[a.id];
+        const isActive = a.id === activeId;
+        const isTarget = a.id === targetId;
+        return (
+          <div
+            key={a.id}
+            className={
+              "bt-seat" +
+              (resp ? " filled" : "") +
+              (isActive ? " active" : "") +
+              (isTarget ? " targeted" : "") +
+              (resp && resp.relevant === false ? " muted" : "")
+            }
+            style={{ left: pos.x + "%", top: pos.y + "%", ...advVars(a) }}
+          >
+            <div className="bt-seat-av">
+              <AdvisorIcon name={a.icon} color={a.accent} size={26} />
+            </div>
+            <span className="bt-seat-name">{t(a.name)}</span>
+            {isTarget && <span className="bt-target-tag">⟵</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// The enlarged active speaker, shown under the table.
+function SpeakerStage({ t, advisorId, resp, thinking }) {
+  const a = advisorId ? ADVISORS[advisorId] : null;
+  if (!a) {
+    return (
+      <div className="stage empty">
+        <div className="typing-dots"><span /><span /><span /></div>
+        <span className="stage-thinking">{t(UI.boardRunning)}</span>
+      </div>
+    );
+  }
+  const target = resp?.respondsTo ? ADVISORS[resp.respondsTo] : null;
+  const outOfScope = resp && resp.relevant === false;
+  return (
+    <div className="stage" style={advVars(a)} key={advisorId + (resp ? "1" : "0")}>
+      <div className="stage-head">
+        <div className="stage-av">
+          <AdvisorIcon name={a.icon} color={a.accent} size={26} />
+        </div>
+        <div className="stage-meta">
+          <span className="stage-name">{t(a.name)}</span>
+          <span className="stage-role">{t(a.role)}</span>
+        </div>
+        {target && (
+          <span className="replying-chip">
+            <IconCornerDownRight size={14} className="reply-arrow" />
+            <span className="replying-label">{t(UI.respondingTo)}</span>
+            <span
+              className="target-pill"
+              style={{ background: target.accentSoft, color: target.accentDeep }}
+            >
+              <AdvisorIcon name={target.icon} color={target.accent} size={14} />
+              {t(target.name)}
+            </span>
+          </span>
+        )}
+      </div>
+
+      {thinking ? (
+        <div className="typing-dots stage-dots"><span /><span /><span /></div>
+      ) : outOfScope ? (
+        <p className="stage-perspective out">
+          <span className="oos-tag">{t(UI.outOfScope)}</span> {t(resp.perspective)}
+        </p>
+      ) : (
+        <>
+          <p className="stage-perspective display">{t(resp.perspective)}</p>
+          {resp.conditions?.length > 0 && (
+            <div className="stage-tags">
+              <span className="tags-label"><IconCheck size={13} /> {t(UI.conditionsLabel)}</span>
+              {resp.conditions.map((c, i) => (
+                <span key={i} className="tag cond">{t(c)}</span>
+              ))}
+            </div>
+          )}
+          {resp.recommendations?.length > 0 && (
+            <div className="stage-tags">
+              <span className="tags-label"><IconBulb size={13} /> {t(UI.recommendsLabel)}</span>
+              {resp.recommendations.map((r, i) => (
+                <span key={i} className="tag rec">{t(r)}</span>
+              ))}
+            </div>
+          )}
+          {resp.reasoning && <p className="stage-reasoning">{t(resp.reasoning)}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function InterjectionBar({ t, value, setValue, onContinue, continueLabel }) {
+  return (
+    <div className="interject">
+      <div className="interject-row">
+        <input
+          className="interject-input"
+          value={value}
+          placeholder={t(UI.interjectPlaceholder)}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") onContinue(); }}
+        />
+        <button className="ctrl primary" onClick={onContinue}>
+          {continueLabel} <IconArrowRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Live debate (round by round, interruptible) ───────────────────────────────
+function LiveDebate({ t, lang, decision, baseContext, onSessionReady, setSaved, onVerdict }) {
+  // phase: r1 | r1pause | r2 | r2pause | verdict | done | error
+  const [phase, setPhase] = useState("r1");
+  const [round1, setRound1] = useState([]);
+  const [round2, setRound2] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [verdict, setVerdict] = useState(null);
+  const [interject, setInterject] = useState("");
+  const [savedTick, setSavedTick] = useState(false);
+  const contextRef = useRef(baseContext || "");
+  const cancelRef = useRef(null);
+  const finalSession = useRef(null);
+
+  const round = phase === "r2" || phase === "r2pause" ? 2 : 1;
+  const byId = useMemo(() => {
+    const m = {};
+    round1.forEach((r) => (m[r.advisor] = r));
+    if (round >= 2) round2.forEach((r) => (m[r.advisor] = r));
+    return m;
+  }, [round1, round2, round]);
+
+  const activeResp = activeId ? byId[activeId] : null;
+  const targetId = round >= 2 && activeResp?.respondsTo ? activeResp.respondsTo : null;
+
+  // kick off round 1 on mount
+  useEffect(() => {
+    cancelRef.current = streamRound(decision, lang, contextRef.current, 1, [], {
+      onAdvisor: (a) => {
+        setRound1((prev) => [...prev, a]);
+        setActiveId(a.advisor);
+      },
+      onDone: () => setPhase("r1pause"),
+      onError: () => setPhase("error"),
+    });
+    return () => cancelRef.current?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const goRound2 = () => {
+    if (interject.trim()) {
+      contextRef.current += `\n\n[Board chair adds]: ${interject.trim()}`;
+      setInterject("");
+    }
+    setPhase("r2");
+    setActiveId(null);
+    cancelRef.current = streamRound(decision, lang, contextRef.current, 2, round1, {
+      onAdvisor: (a) => {
+        setRound2((prev) => [...prev, a]);
+        setActiveId(a.advisor);
+      },
+      onDone: () => setPhase("r2pause"),
+      onError: () => setPhase("error"),
+    });
+  };
+
+  const goVerdict = async () => {
+    if (interject.trim()) {
+      contextRef.current += `\n\n[Board chair adds]: ${interject.trim()}`;
+      setInterject("");
+    }
+    setPhase("verdict");
+    try {
+      const v = await runVerdict(decision, lang, contextRef.current, round1, round2);
+      setVerdict(v);
+      const sess = buildLiveSession(decision, round1, round2, v);
+      finalSession.current = sess;
+      onSessionReady(sess);
+      setPhase("done");
+    } catch {
+      setPhase("error");
+    }
+  };
+
+  const onSave = () => {
+    if (finalSession.current) {
+      setSaved(saveSession(finalSession.current));
+      setSavedTick(true);
+      setTimeout(() => setSavedTick(false), 1800);
+    }
+  };
+
+  const roundLabel =
+    round === 2 ? t(UI.round2) : t(UI.round1);
+  const streaming = phase === "r1" || phase === "r2";
+
+  return (
+    <div className="panel-pad">
+      <div className="debate-top">
+        <h2 className="display debate-h2">{t(UI.debateTitle)}</h2>
+        {phase === "done" && (
+          <div className="debate-tools">
+            <button className="ghost-btn" onClick={onSave}>
+              <IconDeviceFloppy size={15} /> {savedTick ? t(UI.saved) : t(UI.save)}
+            </button>
+            <button
+              className="ghost-btn"
+              onClick={() => downloadSession(finalSession.current, t(decision).slice(0, 24))}
+            >
+              <IconDownload size={15} /> {t(UI.download)}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="decision-recap">
+        <IconQuote size={17} className="recap-icon" />
+        <span>{t(decision)}</span>
+        <span className="src-badge live">{t(UI.liveBadge)}</span>
+      </div>
+
+      <div className="round-banner">
+        <span className="round-label">{roundLabel}</span>
+        {streaming && <IconLoader2 size={14} className="spin" />}
+      </div>
+
+      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} />
+
+      <SpeakerStage
+        t={t}
+        advisorId={activeId}
+        resp={activeResp}
+        thinking={false}
+      />
+
+      {/* controls / interjection */}
+      {phase === "r1pause" && (
+        <InterjectionBar
+          t={t}
+          value={interject}
+          setValue={setInterject}
+          onContinue={goRound2}
+          continueLabel={t(UI.round2)}
+        />
+      )}
+      {phase === "r2pause" && (
+        <InterjectionBar
+          t={t}
+          value={interject}
+          setValue={setInterject}
+          onContinue={goVerdict}
+          continueLabel={t(UI.toVerdict)}
+        />
+      )}
+      {phase === "verdict" && (
+        <div className="discover-loading">
+          <IconLoader2 size={18} className="spin" />
+          <span>{t(UI.boardRunning)}</span>
+        </div>
+      )}
+      {phase === "done" && (
+        <div className="controls">
+          <button className="ctrl accent" onClick={onVerdict}>
+            {t(UI.toVerdict)} <IconArrowRight size={16} />
+          </button>
+        </div>
+      )}
+      {phase === "error" && <p className="error-msg">{t(UI.apiError)}</p>}
+
+      {streaming && (
+        <p className="interject-hint">{t(UI.interjectLabel)} ↓ {t(UI.thinking)}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Replay debate (canned / saved sessions) ───────────────────────────────────
+function ReplayDebate({ t, session, setSaved, onVerdict }) {
   const beats = useMemo(() => {
     const b = [];
-    session.round1.forEach((d) => b.push({ kind: "r1", data: d }));
-    session.round2.forEach((d) => b.push({ kind: "r2", data: d }));
+    session.round1.forEach((d) => b.push({ round: 1, data: d }));
+    session.round2.forEach((d) => b.push({ round: 2, data: d }));
     return b;
   }, [session]);
 
   const [step, setStep] = useState(0);
-  const [stage, setStage] = useState("typing");
-  const [reveal, setReveal] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
-  const activeRef = useRef(null);
 
-  // reset everything when the session changes
   useEffect(() => {
     setStep(0);
-    setStage("typing");
-    setReveal(0);
     setPlaying(false);
   }, [session]);
 
-  const beat = beats[step];
-  const fullText = t(beat.data.rationale);
-  const fullLen = fullText.length;
-  const isLast = step === beats.length - 1;
-  const finished = isLast && stage === "holding" && reveal >= fullLen;
+  const beat = beats[step] || beats[0];
+  const isLast = step >= beats.length - 1;
 
-  const goNext = useCallback(() => {
+  const next = useCallback(() => {
     setStep((s) => {
-      if (s >= beats.length - 1) {
-        setPlaying(false);
-        return s;
-      }
+      if (s >= beats.length - 1) { setPlaying(false); return s; }
       return s + 1;
     });
   }, [beats.length]);
 
-  useEffect(() => {
-    setStage("typing");
-    setReveal(0);
-  }, [step]);
-
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [step, stage]);
+  const restart = useCallback(() => { setStep(0); setPlaying(false); }, []);
 
   useEffect(() => {
     if (!playing) return;
-    if (stage === "typing") {
-      const id = setTimeout(() => setStage("revealing"), TYPING_MS);
-      return () => clearTimeout(id);
-    }
-    if (stage === "revealing") {
-      if (reveal >= fullLen) {
-        setStage("holding");
-        return;
-      }
-      const id = setTimeout(() => setReveal((r) => r + 1), REVEAL_SPEED);
-      return () => clearTimeout(id);
-    }
-    if (stage === "holding") {
-      if (isLast) return;
-      const id = setTimeout(goNext, HOLD_MS);
-      return () => clearTimeout(id);
-    }
-  }, [playing, stage, reveal, fullLen, isLast, goNext]);
-
-  const handleNext = useCallback(() => {
-    if (stage === "typing" || reveal < fullLen) {
-      setReveal(fullLen);
-      setStage("holding");
-    } else if (!isLast) {
-      goNext();
-    }
-  }, [stage, reveal, fullLen, isLast, goNext]);
-
-  const restart = useCallback(() => {
-    setStep(0);
-    setStage("typing");
-    setReveal(0);
-    setPlaying(false);
-  }, []);
+    if (isLast) { setPlaying(false); return; }
+    const id = setTimeout(next, HOLD_MS);
+    return () => clearTimeout(id);
+  }, [playing, step, isLast, next]);
 
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
-      if (e.code === "Space") {
-        e.preventDefault();
-        handleNext();
-      } else if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
+      if (e.code === "Space") { e.preventDefault(); next(); }
+      else if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
       else if (e.key.toLowerCase() === "r") restart();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleNext, restart]);
+  }, [next, restart]);
 
   const onSave = () => {
     setSaved(saveSession(session));
@@ -562,17 +851,15 @@ function Debate({ t, session, setSaved, onVerdict }) {
     setTimeout(() => setSavedTick(false), 1800);
   };
 
-  // who the active rebuttal targets, and the index of that target's last message
-  const targetId = beat.kind === "r2" ? beat.data.respondsTo : null;
-  let rebutTargetIdx = -1;
-  if (targetId) {
-    for (let i = step - 1; i >= 0; i--) {
-      if (beats[i].data.advisor === targetId) {
-        rebutTargetIdx = i;
-        break;
-      }
-    }
-  }
+  // advisors revealed up to current step (for the table)
+  const byId = useMemo(() => {
+    const m = {};
+    beats.slice(0, step + 1).forEach((b) => (m[b.data.advisor] = b.data));
+    return m;
+  }, [beats, step]);
+
+  const activeId = beat.data.advisor;
+  const targetId = beat.round === 2 ? beat.data.respondsTo : null;
 
   return (
     <div className="panel-pad">
@@ -602,176 +889,32 @@ function Debate({ t, session, setSaved, onVerdict }) {
         </span>
       </div>
 
-      <AdvisorStrip t={t} speakerId={beat.data.advisor} targetId={targetId} />
-
-      <div className="thread">
-        {beats.slice(0, step + 1).map((b, i) => {
-          const active = i === step;
-          const showRoundLabel =
-            i === 0 || beats[i - 1].kind !== b.kind;
-          return (
-            <div key={i}>
-              {showRoundLabel && (
-                <div className="round-divider">
-                  <span className="round-label">
-                    {t(b.kind === "r1" ? UI.round1 : UI.round2)}
-                  </span>
-                </div>
-              )}
-              {active ? (
-                <div ref={activeRef}>
-                  <FocusMessage
-                    t={t}
-                    beat={b}
-                    stage={stage}
-                    reveal={reveal}
-                    fullText={fullText}
-                  />
-                </div>
-              ) : (
-                <PastMessage
-                  t={t}
-                  beat={b}
-                  isRebutTarget={i === rebutTargetIdx}
-                />
-              )}
-            </div>
-          );
-        })}
+      <div className="round-banner">
+        <span className="round-label">
+          {t(beat.round === 2 ? UI.round2 : UI.round1)}
+        </span>
+        <span className="round-count">{step + 1} / {beats.length}</span>
       </div>
+
+      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} />
+
+      <SpeakerStage t={t} advisorId={activeId} resp={beat.data} thinking={false} />
 
       <div className="controls">
         <button className="ctrl primary" onClick={() => setPlaying((p) => !p)}>
           {playing ? <IconPlayerPauseFilled size={17} /> : <IconPlayerPlayFilled size={17} />}
           {playing ? t(UI.pause) : t(UI.play)}
         </button>
-        <button className="ctrl" onClick={handleNext}>
+        <button className="ctrl" onClick={next} disabled={isLast}>
           {t(UI.next)} <IconPlayerTrackNextFilled size={15} />
         </button>
-        {finished && (
+        {isLast && (
           <button className="ctrl accent" onClick={onVerdict}>
             {t(UI.toVerdict)} <IconArrowRight size={16} />
           </button>
         )}
         <span className="space-hint">{t(UI.spaceHint)}</span>
       </div>
-    </div>
-  );
-}
-
-function AdvisorStrip({ t, speakerId, targetId }) {
-  return (
-    <div className="advisor-strip">
-      {Object.values(ADVISORS).map((a) => {
-        const isSpeaker = a.id === speakerId;
-        const isTarget = a.id === targetId;
-        return (
-          <div
-            key={a.id}
-            className={
-              "strip-card" +
-              (isSpeaker ? " speaking" : "") +
-              (isTarget ? " targeted" : "")
-            }
-            style={advVars(a)}
-          >
-            <div className="strip-av">
-              <AdvisorIcon name={a.icon} color={a.accent} size={22} />
-            </div>
-            <span className="strip-name">{t(a.name)}</span>
-            {isTarget && <span className="target-tag">⟵</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ReplyChip({ t, speaker, target }) {
-  return (
-    <div className="replying-chip">
-      <span style={{ color: speaker.accent, fontWeight: 600 }}>{t(speaker.name)}</span>
-      <IconCornerDownRight size={15} className="reply-arrow" />
-      <span className="replying-label">{t(UI.respondingTo)}</span>
-      <span
-        className="target-pill"
-        style={{ background: target.accentSoft, color: target.accentDeep }}
-      >
-        <AdvisorIcon name={target.icon} color={target.accent} size={15} />
-        {t(target.name)}
-      </span>
-    </div>
-  );
-}
-
-function FocusMessage({ t, beat, stage, reveal, fullText }) {
-  const a = ADVISORS[beat.data.advisor];
-  const target = beat.kind === "r2" ? ADVISORS[beat.data.respondsTo] : null;
-  const vote = beat.data.vote;
-  const typing = stage === "typing";
-  const revealing = stage === "revealing";
-  const shownText = fullText.slice(0, reveal);
-
-  return (
-    <div className="focus-card" style={advVars(a)}>
-      <div className="focus-header">
-        <div className="speaker">
-          <div className="speaker-av">
-            <AdvisorIcon name={a.icon} color={a.accent} size={24} />
-          </div>
-          <div className="speaker-meta">
-            <span className="speaker-name">{t(a.name)}</span>
-            <span className="speaker-role">{t(a.role)}</span>
-          </div>
-        </div>
-        {target && <ReplyChip t={t} speaker={a} target={target} />}
-        <span className={"vote vote-" + vote}>{t(UI.votes[vote])}</span>
-      </div>
-
-      {typing ? (
-        <div className="typing-dots">
-          <span />
-          <span />
-          <span />
-        </div>
-      ) : (
-        <>
-          <p className="rationale display">
-            {shownText}
-            {revealing && <span className="caret">|</span>}
-          </p>
-          <p className={"reasoning" + (revealing ? " dim" : "")}>
-            {t(beat.data.reasoning)}
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PastMessage({ t, beat, isRebutTarget }) {
-  const a = ADVISORS[beat.data.advisor];
-  const target = beat.kind === "r2" ? ADVISORS[beat.data.respondsTo] : null;
-  const vote = beat.data.vote;
-  return (
-    <div
-      className={"past-msg" + (isRebutTarget ? " rebut-target" : "")}
-      style={advVars(a)}
-    >
-      {isRebutTarget && <span className="rebut-tag">⟵ {t(UI.rebutted)}</span>}
-      <div className="past-head">
-        <div className="past-av">
-          <AdvisorIcon name={a.icon} color={a.accent} size={18} />
-        </div>
-        <span className="past-name">{t(a.name)}</span>
-        {target && (
-          <span className="past-reply">
-            <IconCornerDownRight size={13} /> {t(target.name)}
-          </span>
-        )}
-        <span className={"vote sm vote-" + vote}>{t(UI.votes[vote])}</span>
-      </div>
-      <p className="past-text">{t(beat.data.rationale)}</p>
     </div>
   );
 }
@@ -786,20 +929,13 @@ function Verdict({ t, session }) {
     return () => clearTimeout(id);
   }, [pct]);
 
-  const finalVotes = useMemo(() => {
+  // each advisor's final perspective + conditions (what each lens requires)
+  const finals = useMemo(() => {
     const m = {};
-    session.round2.forEach((r) => (m[r.advisor] = r.vote));
-    return m;
+    session.round1.forEach((r) => (m[r.advisor] = r));
+    session.round2.forEach((r) => (m[r.advisor] = r));
+    return ADV_LIST.map((a) => ({ a, r: m[a.id] })).filter((x) => x.r);
   }, [session]);
-
-  const voteCounts = useMemo(() => {
-    return ["against", "for", "neutral"]
-      .map((k) => ({
-        k,
-        n: Object.values(finalVotes).filter((vt) => vt === k).length,
-      }))
-      .filter((x) => x.n > 0);
-  }, [finalVotes]);
 
   return (
     <div className="panel-pad">
@@ -808,32 +944,26 @@ function Verdict({ t, session }) {
         <h2 className="display">{t(UI.verdictTitle)}</h2>
       </div>
 
-      <div className="tally">
-        {Object.values(ADVISORS).map((a) => {
-          const vote = finalVotes[a.id] || "neutral";
-          return (
-            <div key={a.id} className="tally-cell" style={advVars(a)}>
-              <div className="tally-av">
-                <AdvisorIcon name={a.icon} color={a.accent} size={28} />
+      <div className="requires-title">{t(UI.whatEachRequires)}</div>
+      <div className="requires-grid">
+        {finals.map(({ a, r }) => (
+          <div key={a.id} className="requires-cell" style={advVars(a)}>
+            <div className="rc-head">
+              <div className="rc-av">
+                <AdvisorIcon name={a.icon} color={a.accent} size={22} />
               </div>
-              <div className="tally-name">{t(a.name)}</div>
-              <div className="tally-vote">{t(UI.voteWord[vote])}</div>
+              <span className="rc-name">{t(a.name)}</span>
             </div>
-          );
-        })}
-      </div>
-
-      <div className="vote-summary">
-        <span className="vs-counts">
-          {t(UI.boardSplit)}:{" "}
-          {voteCounts.map((c, i) => (
-            <span key={c.k}>
-              {i > 0 && " · "}
-              <b>{c.n}</b> {t(UI.voteCount[c.k])}
-            </span>
-          ))}
-        </span>
-        <span className="vs-note">{t(UI.notVoteCount)}</span>
+            <p className="rc-perspective">{t(r.perspective)}</p>
+            {r.conditions?.length > 0 && (
+              <ul className="rc-conditions">
+                {r.conditions.map((c, i) => (
+                  <li key={i}><IconCheck size={12} /> {t(c)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="gavel">
@@ -886,7 +1016,7 @@ const TENSION_POS = {
 const TENSION_COLOR = { clash: "#a82e2e", tension: "#c98a2a", align: "#3d7012" };
 
 function Tension({ t, session }) {
-  const edges = useMemo(() => deriveTensions(session.round2), [session]);
+  const edges = useMemo(() => deriveTensions(session), [session]);
   return (
     <div className="panel-pad">
       <div className="section-intro">
@@ -905,10 +1035,7 @@ function Tension({ t, session }) {
               return (
                 <line
                   key={i}
-                  x1={p1.x}
-                  y1={p1.y}
-                  x2={p2.x}
-                  y2={p2.y}
+                  x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                   stroke={TENSION_COLOR[e.kind]}
                   strokeWidth={e.kind === "clash" ? 1.1 : e.kind === "tension" ? 0.7 : 0.8}
                   strokeLinecap="round"
@@ -917,7 +1044,7 @@ function Tension({ t, session }) {
               );
             })}
           </svg>
-          {Object.values(ADVISORS).map((a) => {
+          {ADV_LIST.map((a) => {
             const pos = TENSION_POS[a.id];
             if (!pos) return null;
             return (
@@ -934,6 +1061,21 @@ function Tension({ t, session }) {
             );
           })}
         </div>
+
+        {/* the tensions, labelled */}
+        <div className="tlist">
+          {edges.filter((e) => e.kind !== "align" && e.over).map((e, i) => (
+            <div key={i} className="tlist-item">
+              <span
+                className="tlist-dot"
+                style={{ background: TENSION_COLOR[e.kind] }}
+              />
+              <b>{t(ADVISORS[e.a].name)} ↔ {t(ADVISORS[e.b].name)}</b>
+              <span className="tlist-over">{t(e.over)}</span>
+            </div>
+          ))}
+        </div>
+
         <div className="tlegend">
           <div className="tleg">
             <span className="tleg-line" style={{ background: TENSION_COLOR.clash }} />

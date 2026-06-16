@@ -30,13 +30,21 @@ def main():
     print("BOARD RESULT")
     print("=" * 60)
 
-    print("\n── Round 1: Independent Analysis ──")
-    for r in result.round1_analyses:
-        print(f"  {r.advisor}: [{r.vote.value.upper()}] {r.rationale}")
+    def _show(r):
+        if not r.relevant:
+            print(f"  {r.advisor}: (outside this lens) {r.perspective}")
+            return
+        print(f"  {r.advisor}: {r.perspective}")
+        for c in r.conditions:
+            print(f"      · condition: {c}")
 
-    print("\n── Round 2: Rebuttals ──")
+    print("\n── Round 1: Independent Perspectives ──")
+    for r in result.round1_analyses:
+        _show(r)
+
+    print("\n── Round 2: Collaborative Debate ──")
     for r in result.round2_rebuttals:
-        print(f"  {r.advisor}: [{r.vote.value.upper()}] {r.rationale}")
+        _show(r)
 
     print("\n── Chairman's Verdict ──")
     v = result.verdict

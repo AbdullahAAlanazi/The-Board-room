@@ -3,92 +3,101 @@
 //   - "canned"  : the bundled bilingual demo (values are {en, ar} objects)
 //   - "live"    : freshly generated via the API (values are plain strings)
 // The t() helper in App handles both (string vs {en,ar}).
+//
+// Live runs are driven ROUND BY ROUND so the user can inject context between
+// rounds:  streamRound(1) → [interject] → streamRound(2) → [interject] → runVerdict.
 
 import { BOARD } from "../data/boardData.js";
 
 export const API_BASE = "http://127.0.0.1:8000";
 const STORE_KEY = "boardroom.sessions";
 
-const VOTE_SIGN = { for: 1, against: -1, neutral: 0 };
-
-// Pick who a round-2 rebuttal is aimed at: the round-1 advisor whose stance is
-// most opposed to the speaker (backend round-2 has no explicit target).
-function deriveTarget(speaker, round1) {
-  const others = round1.filter((r) => r.advisor !== speaker.advisor);
-  if (!others.length) return null;
-  const mine = VOTE_SIGN[speaker.vote] ?? 0;
-  // strongest opposite first; otherwise the first differing advisor
-  const opposed = others
-    .map((o) => ({ o, diff: Math.abs((VOTE_SIGN[o.vote] ?? 0) - mine) }))
-    .sort((a, b) => b.diff - a.diff);
-  return opposed[0].o.advisor;
+// ── normalizers (snake_case API → camelCase session shape) ───────────────────
+function normAdvisor(r) {
+  return {
+    advisor: r.advisor,
+    relevant: r.relevant !== false,
+    perspective: r.perspective ?? "",
+    conditions: r.conditions || [],
+    recommendations: r.recommendations || [],
+    reasoning: r.reasoning ?? "",
+    respondsTo: r.responds_to ?? r.respondsTo ?? null,
+  };
 }
 
-// Tension edges between advisors, derived from their final (round-2) votes.
-export function deriveTensions(round2) {
-  const ids = round2.map((r) => r.advisor);
-  const voteOf = Object.fromEntries(round2.map((r) => [r.advisor, r.vote]));
+function normVerdict(v) {
+  return {
+    stance: v.stance || null,
+    boardNote: v.board_note ?? v.boardNote ?? "",
+    recommendation: v.recommendation ?? "",
+    confidence: v.confidence ?? 0,
+    conflicts: v.conflicts || [],
+    tensions: v.tensions || [],
+    nextSteps: v.next_steps ?? v.nextSteps ?? [],
+  };
+}
+
+// Tension-map edges: every advisor pair, marked from the chairman's tensions.
+// Pairs the chairman didn't flag are treated as alignment.
+export function deriveTensions(session) {
+  const ids = (session.round2?.length ? session.round2 : session.round1).map(
+    (r) => r.advisor
+  );
+  const flagged = {};
+  (session.verdict?.tensions || []).forEach((tn) => {
+    const [a, b] = tn.between || [];
+    if (!a || !b) return;
+    flagged[[a, b].sort().join("|")] = {
+      kind: tn.severity === "high" ? "clash" : "tension",
+      over: tn.over,
+    };
+  });
   const edges = [];
   for (let i = 0; i < ids.length; i++) {
     for (let j = i + 1; j < ids.length; j++) {
-      const a = ids[i], b = ids[j];
-      const sa = VOTE_SIGN[voteOf[a]] ?? 0;
-      const sb = VOTE_SIGN[voteOf[b]] ?? 0;
-      let kind = "tension";
-      if (sa !== 0 && sb !== 0) kind = sa === sb ? "align" : "clash";
-      edges.push({ a, b, kind });
+      const key = [ids[i], ids[j]].sort().join("|");
+      const hit = flagged[key];
+      edges.push({ a: ids[i], b: ids[j], kind: hit?.kind || "align", over: hit?.over });
     }
   }
   return edges;
 }
 
-// Normalize a raw API BoardResult into a session.
-export function sessionFromApi(decision, result) {
-  const round1 = result.round1_analyses.map((r) => ({
-    advisor: r.advisor,
-    vote: r.vote,
-    rationale: r.rationale,
-    reasoning: r.reasoning,
-  }));
-  const round2 = result.round2_rebuttals.map((r) => ({
-    advisor: r.advisor,
-    vote: r.vote,
-    rationale: r.rationale,
-    reasoning: r.reasoning,
-    respondsTo: deriveTarget(r, round1),
-  }));
-  return {
-    id: "s_" + Date.now(),
-    source: "live",
-    decision,
-    round1,
-    round2,
-    verdict: {
-      stance: result.verdict.stance || null,
-      boardNote: result.verdict.board_note || "",
-      recommendation: result.verdict.recommendation,
-      confidence: result.verdict.confidence,
-      conflicts: result.verdict.conflicts || [],
-      nextSteps: result.verdict.next_steps || [],
-    },
-    createdAt: Date.now(),
-  };
-}
-
-// The bundled demo as a session (authored respondsTo already present).
+// The bundled demo as a session (authored respondsTo / tensions already present).
 export function cannedSession() {
   return {
     id: "canned",
     source: "canned",
     decision: BOARD.decision,
-    round1: BOARD.round1,
-    round2: BOARD.round2,
-    verdict: BOARD.verdict,
+    round1: BOARD.round1.map(normAdvisor),
+    round2: BOARD.round2.map(normAdvisor),
+    verdict: normVerdict({
+      stance: BOARD.verdict.stance,
+      board_note: BOARD.verdict.boardNote,
+      recommendation: BOARD.verdict.recommendation,
+      confidence: BOARD.verdict.confidence,
+      conflicts: BOARD.verdict.conflicts,
+      tensions: BOARD.verdict.tensions,
+      next_steps: BOARD.verdict.nextSteps,
+    }),
     createdAt: 0,
   };
 }
 
-// Ask the Chairman for discovery questions before the board convenes.
+// Assemble a finished live session from its parts (for replay / save).
+export function buildLiveSession(decision, round1, round2, verdict) {
+  return {
+    id: "s_" + Date.now(),
+    source: "live",
+    decision,
+    round1: round1.map(normAdvisor),
+    round2: round2.map(normAdvisor),
+    verdict: normVerdict(verdict),
+    createdAt: Date.now(),
+  };
+}
+
+// ── live API ─────────────────────────────────────────────────────────────────
 export async function runDiscover(decision, lang = "en") {
   const res = await fetch(`${API_BASE}/api/discover`, {
     method: "POST",
@@ -100,32 +109,32 @@ export async function runDiscover(decision, lang = "en") {
   return data.questions; // string[]
 }
 
-// Call the live API. `lang` ("en" | "ar") sets the language the board replies in.
-// `context` is optional pre-session context built from discovery Q&A.
-// `fast=true` skips Round 2 for ~2x speed.
-export async function runLiveBoard(decision, lang = "en", context = "", fast = false) {
-  const res = await fetch(`${API_BASE}/api/board`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ decision, context, lang, fast }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  return sessionFromApi(decision, data);
-}
-
-// Stream the board via SSE. Calls onR1/onR2/onVerdict as each arrives,
-// then onDone(session) when complete. Returns a cancel() function.
-export function streamBoard(decision, lang = "en", context = "", fast = false, callbacks = {}) {
+// Stream one round via SSE. callbacks.onAdvisor(normalized) fires per advisor;
+// callbacks.onDone(allAdvisors[]) when the round completes. Returns cancel().
+export function streamRound(decision, lang, context, round, prior, callbacks = {}) {
   const ctrl = new AbortController();
 
   (async () => {
     let res;
     try {
-      res = await fetch(`${API_BASE}/api/board/stream`, {
+      res = await fetch(`${API_BASE}/api/round`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision, context, lang, fast }),
+        body: JSON.stringify({
+          decision,
+          context,
+          lang,
+          round,
+          prior: (prior || []).map((r) => ({
+            advisor: r.advisor,
+            relevant: r.relevant,
+            perspective: r.perspective,
+            conditions: r.conditions,
+            recommendations: r.recommendations,
+            reasoning: r.reasoning,
+            responds_to: r.respondsTo ?? null,
+          })),
+        }),
         signal: ctrl.signal,
       });
     } catch {
@@ -137,9 +146,7 @@ export function streamBoard(decision, lang = "en", context = "", fast = false, c
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
-    const round1 = [], round2 = [];
-    let verdict = null;
-
+    const collected = [];
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -150,20 +157,14 @@ export function streamBoard(decision, lang = "en", context = "", fast = false, c
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
-          if (raw === "[DONE]") {
-            const session = sessionFromApi(decision, {
-              round1_analyses: round1,
-              round2_rebuttals: fast ? [] : round2,
-              verdict,
-            });
-            callbacks.onDone?.(session);
-            return;
-          }
+          if (raw === "[DONE]") { callbacks.onDone?.(collected); return; }
           try {
             const ev = JSON.parse(raw);
-            if (ev.type === "r1") { round1.push(ev.data); callbacks.onR1?.(ev.data); }
-            else if (ev.type === "r2") { round2.push(ev.data); callbacks.onR2?.(ev.data); }
-            else if (ev.type === "verdict") { verdict = ev.data; callbacks.onVerdict?.(); }
+            if (ev.type === "advisor") {
+              const a = normAdvisor(ev.data);
+              collected.push(a);
+              callbacks.onAdvisor?.(a);
+            }
           } catch { /* malformed event, skip */ }
         }
       }
@@ -173,6 +174,31 @@ export function streamBoard(decision, lang = "en", context = "", fast = false, c
   })();
 
   return () => ctrl.abort();
+}
+
+export async function runVerdict(decision, lang, context, round1, round2) {
+  const pack = (r) => ({
+    advisor: r.advisor,
+    relevant: r.relevant,
+    perspective: r.perspective,
+    conditions: r.conditions,
+    recommendations: r.recommendations,
+    reasoning: r.reasoning,
+    responds_to: r.respondsTo ?? null,
+  });
+  const res = await fetch(`${API_BASE}/api/verdict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      decision,
+      context,
+      lang,
+      round1: round1.map(pack),
+      round2: round2.map(pack),
+    }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return normVerdict(await res.json());
 }
 
 // ── persistence ────────────────────────────────────────────────────────────

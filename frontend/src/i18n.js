@@ -31,33 +31,24 @@ export const UI = {
     ar: "الرد الحي يأخذ ~٣٠ ثانية ويحتاج تشغيل سيرفر الـAPI.",
   },
 
-  // discovery phase
+  // discovery chat
   discoverLoading: {
     en: "The chairman is preparing questions…",
     ar: "الرئيس يُعدّ الأسئلة…",
   },
-  discoverTitle: {
-    en: "Before we begin",
-    ar: "قبل أن نبدأ",
+  discoverIntro: {
+    en: "Before I convene the board, let me understand the situation a little better.",
+    ar: "قبل أن أعقد الجلسة، دعني أفهم الموقف بشكل أوضح.",
   },
-  discoverLede: {
-    en: "The chairman wants a bit more context to sharpen the debate.",
-    ar: "الرئيس يريد فهم السياق بشكل أعمق قبل انعقاد المجلس.",
-  },
-  discoverOptional: { en: "(optional)", ar: "(اختياري)" },
-  discoverSkip: {
-    en: "Skip — go straight to the debate",
-    ar: "تخطَّ — انطلق للنقاش مباشرة",
-  },
-  discoverConvene: {
-    en: "Convene with context",
-    ar: "ابدأ الجلسة بالسياق",
-  },
+  chairman: { en: "Chairman", ar: "رئيس المجلس" },
+  answerPlaceholder: { en: "Type your answer…", ar: "اكتب إجابتك…" },
+  send: { en: "Send", ar: "إرسال" },
+  discoverSkip: { en: "Skip the rest", ar: "تخطَّ الباقي" },
+  discoverStart: { en: "Convene the board", ar: "اعقد الجلسة" },
   boardRunning: {
     en: "The board is deliberating…",
     ar: "المجلس يتداول…",
   },
-  fastMode: { en: "Fast mode (skip debate round)", ar: "وضع سريع (بدون جولة النقاش)" },
   apiError: {
     en: "Couldn't reach the live board API. Is the server running on :8000?",
     ar: "تعذّر الوصول لسيرفر الـAPI. هل السيرفر شغّال على :8000؟",
@@ -80,20 +71,32 @@ export const UI = {
   advEyebrow: { en: "Three lenses, three agendas", ar: "ثلاث زوايا، ثلاث أولويات" },
   advTitle: { en: "Meet your board", ar: "تعرّف على مجلسك" },
   advLede: {
-    en: "Each advisor reasons from a single perspective — and is built to push back on the others.",
-    ar: "كل مستشار يحلّل من زاوية واحدة — ومصمّم ليعارض الآخرين.",
+    en: "Each advisor reasons from a single lens — and contributes where it genuinely applies.",
+    ar: "كل مستشار يحلّل من زاوية واحدة — ويساهم حيث ينطبق اختصاصه فعلاً.",
   },
 
   // debate
-  debateTitle: { en: "The board debates", ar: "المجلس يتناقش" },
-  round1: { en: "Round 1 · independent analysis", ar: "الجولة ١ · تحليل مستقل" },
+  debateTitle: { en: "The board convenes", ar: "المجلس ينعقد" },
+  round1: { en: "Round 1 · independent perspectives", ar: "الجولة ١ · منظورات مستقلة" },
   round2: { en: "Round 2 · the debate", ar: "الجولة ٢ · النقاش" },
   respondingTo: { en: "responding to", ar: "يرد على" },
+  conditionsLabel: { en: "Conditions", ar: "الشروط" },
+  recommendsLabel: { en: "Recommends", ar: "التوصيات" },
+  outOfScope: { en: "outside this lens", ar: "خارج هذه الزاوية" },
   play: { en: "Play", ar: "تشغيل" },
   pause: { en: "Pause", ar: "إيقاف" },
   next: { en: "Next", ar: "التالي" },
   restart: { en: "Replay", ar: "إعادة" },
   toVerdict: { en: "See the verdict", ar: "اعرض القرار" },
+  continueWord: { en: "Continue", ar: "متابعة" },
+  thinking: { en: "deliberating…", ar: "يتداول…" },
+  // interjection
+  interjectLabel: { en: "Add context to the board", ar: "أضف سياقاً للمجلس" },
+  interjectPlaceholder: {
+    en: "Interject — add a constraint, a fact, a question…",
+    ar: "قاطِع — أضف قيداً أو معلومة أو سؤالاً…",
+  },
+  interjected: { en: "you added context", ar: "أضفت سياقاً" },
   spaceHint: {
     en: "Space = next · P = play/pause · R = replay",
     ar: "مسافة = التالي · P = تشغيل/إيقاف · R = إعادة",
@@ -111,38 +114,21 @@ export const UI = {
     against: { en: "Do not proceed", ar: "لا تنفّذ" },
     conditional: { en: "Proceed — conditional", ar: "نفّذ — بشروط" },
   },
-  boardSplit: { en: "Board vote", ar: "تصويت المجلس" },
-  notVoteCount: {
-    en: "The chairman weighs the arguments, not the vote count.",
-    ar: "الرئيس يوازن الحجج، لا عدد الأصوات.",
-  },
-  voteCount: {
-    for: { en: "for", ar: "مع" },
-    against: { en: "against", ar: "ضد" },
-    neutral: { en: "neutral", ar: "محايد" },
+  whatEachRequires: {
+    en: "What each lens requires",
+    ar: "ما يتطلّبه كل منظور",
   },
 
   // tension
   tensionEyebrow: { en: "Where they clash", ar: "أين يختلفون" },
   tensionTitle: { en: "The tension map", ar: "خريطة الخلافات" },
   tensionLede: {
-    en: "Good decisions come from disagreement. Here's who's pulling against whom.",
-    ar: "القرارات الجيدة تأتي من الاختلاف. هذا من يشدّ ضد من.",
+    en: "Good decisions come from productive tension. Here's where the lenses pull against each other.",
+    ar: "القرارات الجيدة تأتي من التوتر البنّاء. هنا حيث تتجاذب الزوايا.",
   },
-  legClash: { en: "Strong disagreement", ar: "خلاف قوي" },
-  legTension: { en: "Partial tension", ar: "توتر جزئي" },
+  legClash: { en: "Strong tension", ar: "توتر قوي" },
+  legTension: { en: "Mild tension", ar: "توتر خفيف" },
   legAlign: { en: "Alignment", ar: "توافق" },
-
-  votes: {
-    for: { en: "FOR", ar: "مع" },
-    against: { en: "AGAINST", ar: "ضد" },
-    neutral: { en: "NEUTRAL", ar: "محايد" },
-  },
-  voteWord: {
-    for: { en: "For", ar: "مع" },
-    against: { en: "Against", ar: "ضد" },
-    neutral: { en: "Neutral", ar: "محايد" },
-  },
 
   langToggle: { en: "العربية", ar: "English" },
   footer: { en: "AI BOARD ROOM · Hackathon 2026", ar: "AI BOARD ROOM · هاكاثون ٢٠٢٦" },

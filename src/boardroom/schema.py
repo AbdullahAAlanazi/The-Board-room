@@ -14,22 +14,17 @@ Because these are Pydantic models, they double as:
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
-class Vote(str, Enum):
-    """How an advisor lands on the decision. A plain str-enum so it
-    serializes to clean JSON ("for" / "against" / "neutral")."""
-
-    FOR = "for"
-    AGAINST = "against"
-    NEUTRAL = "neutral"
-
-
 class AdvisorResponse(BaseModel):
     """One advisor's contribution in one round of the debate.
+
+    This is a *collaborative perspective*, not a vote. An advisor contributes
+    its lens — what it sees, what must be true (conditions), and what it
+    recommends — and the chairman synthesizes all perspectives into a decision.
 
     THIS is the contract a teammate's advisor must produce. If every advisor
     returns exactly this, the orchestrator can run any number of them without
@@ -39,14 +34,34 @@ class AdvisorResponse(BaseModel):
     advisor: str = Field(
         description="The advisor's name/role, e.g. 'CFO' or 'Legal'."
     )
-    vote: Vote = Field(
-        description="This advisor's stance on the decision."
+    relevant: bool = Field(
+        default=True,
+        description="Whether this decision actually falls within this advisor's "
+        "domain. Set False when it genuinely doesn't — then `perspective` is one "
+        "short line saying so, and conditions/recommendations stay empty. Do NOT "
+        "force an opinion on something outside your lens.",
     )
-    rationale: str = Field(
-        description="One-line justification for the vote — short and punchy."
+    perspective: str = Field(
+        description="The advisor's headline take in 1-2 sentences — its honest "
+        "view through its own lens. Not a vote, a viewpoint.",
+    )
+    conditions: List[str] = Field(
+        default_factory=list,
+        description="What must be true for this to work — prerequisites, "
+        "requirements, or guardrails. Licensing/permits/compliance needs go HERE "
+        "as conditions to satisfy, never as reasons to oppose.",
+    )
+    recommendations: List[str] = Field(
+        default_factory=list,
+        description="Concrete, actionable suggestions from this advisor's lens.",
     )
     reasoning: str = Field(
-        description="The fuller argument: the analysis behind the vote."
+        description="The fuller argument: the analysis behind the perspective.",
+    )
+    responds_to: Optional[str] = Field(
+        default=None,
+        description="In round 2 only: the name of the advisor whose point you are "
+        "directly engaging or building on (e.g. 'CFO'). Null in round 1.",
     )
 
 
@@ -58,18 +73,34 @@ class Stance(str, Enum):
     CONDITIONAL = "conditional" # go ahead, but only if conditions are met
 
 
+class Tension(BaseModel):
+    """A point of friction the chairman identified between two advisors'
+    perspectives. Powers the tension map (replaces vote-derived edges)."""
+
+    between: List[str] = Field(
+        description="The two advisors in tension, by name, e.g. ['CFO', 'Market'].",
+    )
+    over: str = Field(
+        description="A short phrase naming what they pull against, e.g. "
+        "'pace of expansion vs. cash runway'.",
+    )
+    severity: str = Field(
+        default="low",
+        description="'high' for a real clash, 'low' for mild divergence.",
+    )
+
+
 class ChairmanVerdict(BaseModel):
-    """The chairman's synthesis after weighing every advisor's argument."""
+    """The chairman's synthesis after weighing every advisor's perspective."""
 
     stance: Stance = Field(
-        description="The final call: proceed, against, or conditional. This is a "
-        "synthesis of the arguments — NOT a majority vote count. You may overrule "
-        "the majority if the stronger arguments point the other way.",
+        description="The final call on the decision: proceed, against, or "
+        "conditional. A synthesis of the perspectives and the conditions raised.",
     )
     board_note: str = Field(
-        description="ONE sentence explaining how your call relates to the advisors' "
-        "votes — especially if you went against the majority, say why (e.g. their "
-        "objections were conditional, not absolute).",
+        description="ONE sentence on how the perspectives converged — where the "
+        "board aligned and what tipped your call (e.g. 'all three align on the "
+        "opportunity; the open question is sequencing, not whether').",
     )
     recommendation: str = Field(
         description="The final recommendation the leader should act on."
@@ -81,7 +112,11 @@ class ChairmanVerdict(BaseModel):
     )
     conflicts: List[str] = Field(
         default_factory=list,
-        description="The key points where advisors disagreed.",
+        description="The key points where perspectives diverged.",
+    )
+    tensions: List[Tension] = Field(
+        default_factory=list,
+        description="Pairwise tensions between advisors, for the tension map.",
     )
     next_steps: List[str] = Field(
         default_factory=list,

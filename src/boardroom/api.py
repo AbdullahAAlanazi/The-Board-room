@@ -195,10 +195,9 @@ def api_health():
 @app.post("/api/discover", response_model=DiscoveryResult)
 def discover(req: BoardRequest):
     language = _LANGUAGES.get(req.lang, "English")
+    context = _build_context(req.decision, extra=req.context)
     with contextlib.redirect_stdout(sys.stderr):
-        return discover_questions(
-            req.decision, language=language, retriever=_session.get("retriever")
-        )
+        return discover_questions(req.decision, language=language, context=context)
 
 
 @app.post("/api/round")

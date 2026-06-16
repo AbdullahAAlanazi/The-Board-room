@@ -16,27 +16,44 @@ from boardroom.schema import (
 
 
 def discover_questions(
-    decision: str, language: str = "English", retriever=None
+    decision: str, language: str = "English", context: str = ""
 ) -> DiscoveryResult:
-    """The Chairman asks discovery questions ONLY when the decision is vague or
-    missing context. Returns an empty list when it's already clear enough."""
+    """The Chairman asks discovery questions ONLY when the decision is vague AND the
+    answer isn't already in the company context (profile + uploaded documents).
+    Returns an empty list when it's already clear enough."""
+    context_block = (
+        f"\n\nKNOWN COMPANY CONTEXT (profile + uploaded documents) — treat this as facts "
+        f"you ALREADY have:\n{context.strip()}\n"
+        if context and context.strip()
+        else ""
+    )
     prompt = ChatPromptTemplate.from_messages([
         ("system",
          "You are the Chairman of a business advisory board. Before convening the debate, "
-         "judge whether the decision is specific enough to debate, or too vague.\n\n"
-         "TEST: a decision is SPECIFIC if it names the concrete action AND at least the "
-         "scope/scale, budget, or timeline. It is VAGUE if it's a bare one-liner missing the "
-         "basics (what exactly / where / how big).\n\n"
-         "• VAGUE (e.g. 'Should we expand?', 'Should we hire?', 'Should we go digital?') → ask "
-         "2-3 short questions for the missing basics.\n"
-         "• SPECIFIC (e.g. 'Should we open a 2nd Jeddah branch, 500k SAR, in 3 months?') → "
-         "return an EMPTY list; do NOT ask about anything the decision already states.\n\n"
+         "judge whether you have enough to proceed, or genuinely must ask.\n\n"
+         "STRONG RULE: if KNOWN COMPANY CONTEXT is provided below (a profile or uploaded "
+         "documents), DEFAULT TO RETURNING AN EMPTY LIST — the board will read those documents "
+         "itself and work from them. Do NOT ask the user to restate numbers, budget, "
+         "financials, or facts that the documents could contain. Only ask if the decision is "
+         "literally impossible to discuss without a specific missing fact that is clearly NOT "
+         "in the documents.\n\n"
+         "If NO company context is provided: a decision is SPECIFIC if it names the concrete "
+         "action AND at least the scope/scale, budget, or timeline; it is VAGUE if it's a bare "
+         "one-liner missing the basics. For a VAGUE decision with no context (e.g. 'Should we "
+         "expand?'), ask 2-3 short questions for the genuinely missing basics. For a SPECIFIC "
+         "one, return an EMPTY list.\n\n"
          "Never ask more than 3. One crisp sentence each, no preamble. Write in {language}."),
-        ("human", "Decision: {decision}\n\nIf specific, return empty questions. If vague, ask the missing basics."),
+        ("human", "Decision: {decision}{context_block}\n\n"
+                  "If specific or covered by context, return empty questions. "
+                  "Otherwise ask only the genuinely missing basics."),
     ])
     llm = get_llm(temperature=0.3, max_tokens=200)
     chain = prompt | llm.with_structured_output(DiscoveryResult)
-    return chain.invoke({"decision": decision, "language": language})
+    return chain.invoke({
+        "decision": decision,
+        "language": language,
+        "context_block": context_block,
+    })
 
 
 def format_round_summary(responses: list[AdvisorResponse]) -> str:

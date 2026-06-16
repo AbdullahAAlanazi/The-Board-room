@@ -56,7 +56,7 @@ def _build_and_cache(pdf_paths: list[Path], fingerprint: str) -> FAISS:
         chunk_overlap=_CHUNK_OVERLAP,
     )
     chunks = splitter.split_documents(docs)
-    print(f"[RAG] {len(docs)} pages → {len(chunks)} chunks. Embedding...")
+    print(f"[RAG] {len(docs)} pages -> {len(chunks)} chunks. Embedding...")
 
     vectorstore = FAISS.from_documents(chunks, _get_embeddings())
 

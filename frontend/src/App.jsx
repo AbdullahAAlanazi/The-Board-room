@@ -4,7 +4,7 @@ import { UI, EXAMPLES } from "./i18n.js";
 import { AdvisorIcon } from "./components/Icons.jsx";
 import {
   cannedSession,
-  runDiscover,
+  runIntake,
   streamRound,
   runVerdict,
   buildLiveSession,
@@ -177,7 +177,7 @@ function Topbar({ t, tab, setTab, lang, setLang }) {
 }
 
 // ── Convene (with discovery chat) ─────────────────────────────────────────────
-// phase: "input" → "discovering" → "chat"
+// phase: "input" → "discovering" → "chat" | "answered"
 function Convene({ t, lang, saved, setSaved, onReplay, onLive }) {
   const [draft, setDraft] = useState("");
   const [phase, setPhase] = useState("input");
@@ -186,6 +186,8 @@ function Convene({ t, lang, saved, setSaved, onReplay, onLive }) {
   const [qIdx, setQIdx] = useState(0);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
+  const [answer, setAnswer] = useState("");          // chairman's direct answer
+  const [suggested, setSuggested] = useState("");    // suggested decision
   const fileRef = useRef(null);
   const chatEndRef = useRef(null);
 
@@ -205,17 +207,36 @@ function Convene({ t, lang, saved, setSaved, onReplay, onLive }) {
     setError("");
     setPhase("discovering");
     try {
-      const qs = await runDiscover(q, lang);
-      setQuestions(qs.length ? qs : []);
-      setAnswers([]);
-      setQIdx(0);
-      setPhase(qs.length ? "chat" : "input");
-      if (!qs.length) onLive(q, "");
+      const r = await runIntake(q, lang);
+      if (r.kind === "question") {
+        // Chairman answers directly + proposes a decision.
+        setAnswer(r.answer);
+        setSuggested(r.suggestedDecision);
+        setPhase("answered");
+      } else if (r.questions.length) {
+        // A vague decision → discovery chat.
+        setQuestions(r.questions);
+        setAnswers([]);
+        setQIdx(0);
+        setPhase("chat");
+      } else {
+        // A clear decision → straight to the board.
+        onLive(q, "");
+        setPhase("input");
+      }
     } catch {
-      // Discovery unavailable — go straight to the live board.
+      // Intake unavailable — go straight to the live board.
       onLive(q, "");
       setPhase("input");
     }
+  };
+
+  const resetIntake = () => {
+    setPhase("input");
+    setAnswer("");
+    setSuggested("");
+    setQuestions([]);
+    setAnswers([]);
   };
 
   const sendReply = () => {
@@ -255,7 +276,16 @@ function Convene({ t, lang, saved, setSaved, onReplay, onLive }) {
         <p className="lede">{t(UI.heroLede)}</p>
 
         <div className="compose">
-          {phase === "chat" ? (
+          {phase === "answered" ? (
+            <AnswerView
+              t={t}
+              question={draft}
+              answer={answer}
+              suggested={suggested}
+              onConvene={() => onLive(suggested || draft.trim(), "")}
+              onReset={resetIntake}
+            />
+          ) : phase === "chat" ? (
             <DiscoveryChat
               t={t}
               decision={draft}
@@ -444,6 +474,45 @@ function DiscoveryChat({ t, decision, questions, answers, qIdx, reply, setReply,
       <button className="chat-skip" onClick={onSkip}>
         {t(UI.discoverSkip)} →
       </button>
+    </div>
+  );
+}
+
+// The chairman's direct answer to a question + a suggested decision to convene on.
+function AnswerView({ t, question, answer, suggested, onConvene, onReset }) {
+  return (
+    <div className="chat">
+      <div className="chat-thread">
+        <div className="chat-row user">
+          <div className="bubble user">{question}</div>
+        </div>
+        <div className="chat-row chair">
+          <div className="chair-av"><IconCrown size={15} /></div>
+          <div className="bubble chair">{answer}</div>
+        </div>
+      </div>
+
+      {suggested && (
+        <div className="suggested-card">
+          <div className="suggested-label">
+            <IconBolt size={14} /> {t(UI.suggestedDecision)}
+          </div>
+          <div className="suggested-text">{suggested}</div>
+          <div className="suggested-actions">
+            <button className="convene-btn" onClick={onConvene}>
+              <IconUsers size={17} /> {t(UI.convOnSuggested)}
+            </button>
+            <button className="ghost-btn" onClick={onReset}>
+              {t(UI.askAnother)}
+            </button>
+          </div>
+        </div>
+      )}
+      {!suggested && (
+        <div className="convene-actions">
+          <button className="ghost-btn" onClick={onReset}>{t(UI.askAnother)}</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -45,6 +45,10 @@ export const UI = {
   send: { en: "Send", ar: "إرسال" },
   discoverSkip: { en: "Skip the rest", ar: "تخطَّ الباقي" },
   discoverStart: { en: "Convene the board", ar: "اعقد الجلسة" },
+  // intake — direct answer to a question
+  suggestedDecision: { en: "A decision worth bringing to the board", ar: "قرار يستحق عرضه على المجلس" },
+  convOnSuggested: { en: "Convene the board on this", ar: "اعقد الجلسة على هذا" },
+  askAnother: { en: "Ask something else", ar: "اسأل شيئاً آخر" },
   boardRunning: {
     en: "The board is deliberating…",
     ar: "المجلس يتداول…",

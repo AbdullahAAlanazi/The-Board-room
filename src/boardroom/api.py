@@ -38,6 +38,7 @@ import boardroom.advisors  # ensure advisors are registered
 from boardroom.board import (
     chairman_synthesize,
     discover_questions,
+    intake,
     round2_context,
     run_board,
 )
@@ -48,6 +49,7 @@ from boardroom.schema import (
     BoardResult,
     ChairmanVerdict,
     DiscoveryResult,
+    IntakeResult,
 )
 
 app = FastAPI(title="AI Board Room", version="0.1.0")
@@ -190,6 +192,16 @@ def board_run(body: RunRequest):
 @app.get("/api/health")
 def api_health():
     return {"ok": True}
+
+
+@app.post("/api/intake", response_model=IntakeResult)
+def intake_route(req: BoardRequest):
+    """First read of the user's input: answer a question (and suggest a decision),
+    or route a decision to the board (with discovery only when vague)."""
+    language = _LANGUAGES.get(req.lang, "English")
+    context = _build_context(req.decision, extra=req.context)
+    with contextlib.redirect_stdout(sys.stderr):
+        return intake(req.decision, language=language, context=context)
 
 
 @app.post("/api/discover", response_model=DiscoveryResult)

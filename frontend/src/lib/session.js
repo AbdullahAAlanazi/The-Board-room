@@ -98,15 +98,21 @@ export function buildLiveSession(decision, round1, round2, verdict) {
 }
 
 // ── live API ─────────────────────────────────────────────────────────────────
-export async function runDiscover(decision, lang = "en") {
-  const res = await fetch(`${API_BASE}/api/discover`, {
+// First read of the user's input: a question to answer, or a decision to debate.
+export async function runIntake(decision, lang = "en") {
+  const res = await fetch(`${API_BASE}/api/intake`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ decision, lang }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
-  return data.questions; // string[]
+  const d = await res.json();
+  return {
+    kind: d.kind === "question" ? "question" : "decision",
+    answer: d.answer || "",
+    suggestedDecision: d.suggested_decision || "",
+    questions: d.questions || [],
+  };
 }
 
 // Stream one round via SSE. callbacks.onAdvisor(normalized) fires per advisor;

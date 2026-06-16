@@ -548,6 +548,22 @@ body {
 }
 .chat-skip:hover { color: var(--ink-soft); }
 
+/* intake: suggested decision card */
+.suggested-card {
+  margin-top: 4px; background: var(--bg-warm);
+  border: 1.5px solid var(--line); border-radius: var(--r); padding: 18px 20px;
+}
+.suggested-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #9a6810; margin-bottom: 8px;
+}
+.suggested-text {
+  font-family: var(--serif); font-size: 19px; line-height: 1.35;
+  color: var(--ink); margin-bottom: 16px;
+}
+.suggested-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
 /* ── Boardroom table ──────────────────────────────────────────────────────── */
 .round-banner {
   display: flex; align-items: center; gap: 10px; margin: 4px 0 6px;

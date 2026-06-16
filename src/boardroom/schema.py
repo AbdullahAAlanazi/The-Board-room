@@ -139,6 +139,31 @@ class DiscoveryResult(BaseModel):
     )
 
 
+class IntakeResult(BaseModel):
+    """The Chairman's first read of the user's input: is it a question to answer,
+    or a decision to debate?"""
+
+    kind: str = Field(
+        description="'question' if the user is asking for information/an opinion; "
+        "'decision' if they are proposing a choice for the board to weigh."
+    )
+    answer: str = Field(
+        default="",
+        description="When kind=='question': a direct, concrete answer using the "
+        "company context (cite figures if present). Empty for decisions.",
+    )
+    suggested_decision: str = Field(
+        default="",
+        description="When kind=='question': ONE specific business decision the board "
+        "could deliberate next, phrased as a decision. Empty for decisions.",
+    )
+    questions: list[str] = Field(
+        default_factory=list,
+        description="When kind=='decision' AND the decision is vague and not covered "
+        "by the context: up to 3 discovery questions. Empty otherwise.",
+    )
+
+
 class BoardResult(BaseModel):
     """The complete output of a board meeting — what the API returns and the
     dashboard renders. Assembled by the orchestrator, not by any one advisor.

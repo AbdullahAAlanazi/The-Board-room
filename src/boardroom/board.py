@@ -12,7 +12,58 @@ from boardroom.schema import (
     BoardResult,
     ChairmanVerdict,
     DiscoveryResult,
+    IntakeResult,
 )
+
+
+def _context_block(context: str) -> str:
+    """Format the known company context (profile + RAG) for a chairman prompt."""
+    if context and context.strip():
+        return (
+            "\n\nKNOWN COMPANY CONTEXT (profile + uploaded documents) — treat this as "
+            f"facts you ALREADY have:\n{context.strip()}\n"
+        )
+    return ""
+
+
+def intake(decision: str, language: str = "English", context: str = "") -> IntakeResult:
+    """The Chairman's first read of the user's input.
+
+    - QUESTION (asking for info/an opinion) → answer it directly from the company
+      context and propose ONE decision the board could deliberate.
+    - DECISION (a choice to weigh) → route to the board; only ask discovery questions
+      when it's vague and not covered by the context.
+    """
+    context_block = _context_block(context)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are the Chairman of a business advisory board. Read the user's input and "
+         "classify it.\n\n"
+         "If it is a QUESTION (asking for facts, numbers, or an opinion — e.g. 'how much "
+         "budget do I have?', 'what are our biggest risks?'):\n"
+         "  • set kind='question'\n"
+         "  • `answer`: answer directly and concretely, USING the known company context and "
+         "citing figures from it when present. 2-4 sentences.\n"
+         "  • `suggested_decision`: propose ONE specific business decision the board could "
+         "debate next, phrased as a decision (e.g. 'Should we hire a second data engineer "
+         "given our Q1 net income?').\n"
+         "  • leave `questions` empty.\n\n"
+         "If it is a DECISION (a proposal/choice to weigh — e.g. 'should we open a branch', "
+         "'launch a subscription'):\n"
+         "  • set kind='decision', leave `answer` and `suggested_decision` empty.\n"
+         "  • If company context is provided OR the decision is specific, leave `questions` "
+         "empty. ONLY if it is vague AND not covered by the context, list up to 3 discovery "
+         "questions.\n\n"
+         "Write `answer`, `suggested_decision`, and `questions` entirely in {language}."),
+        ("human", "User input: {decision}{context_block}"),
+    ])
+    llm = get_llm(temperature=0.3, max_tokens=400)
+    chain = prompt | llm.with_structured_output(IntakeResult)
+    return chain.invoke({
+        "decision": decision,
+        "language": language,
+        "context_block": context_block,
+    })
 
 
 def discover_questions(

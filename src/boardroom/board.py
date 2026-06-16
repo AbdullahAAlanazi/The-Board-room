@@ -57,7 +57,7 @@ def intake(decision: str, language: str = "English", context: str = "") -> Intak
          "Write `answer`, `suggested_decision`, and `questions` entirely in {language}."),
         ("human", "User input: {decision}{context_block}"),
     ])
-    llm = get_llm(temperature=0.3, max_tokens=400)
+    llm = get_llm(temperature=0.3, max_tokens=700)
     chain = prompt | llm.with_structured_output(IntakeResult)
     return chain.invoke({
         "decision": decision,
@@ -98,7 +98,7 @@ def discover_questions(
                   "If specific or covered by context, return empty questions. "
                   "Otherwise ask only the genuinely missing basics."),
     ])
-    llm = get_llm(temperature=0.3, max_tokens=200)
+    llm = get_llm(temperature=0.3, max_tokens=400)
     chain = prompt | llm.with_structured_output(DiscoveryResult)
     return chain.invoke({
         "decision": decision,
@@ -253,7 +253,7 @@ def chairman_synthesize(
          "Produce your final verdict."),
     ])
 
-    llm = get_llm(temperature=0.3, max_tokens=500)
+    llm = get_llm(temperature=0.3, max_tokens=900)
     chain = prompt | llm.with_structured_output(ChairmanVerdict)
 
     return chain.invoke({

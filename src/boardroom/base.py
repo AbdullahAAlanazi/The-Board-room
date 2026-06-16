@@ -18,8 +18,9 @@ class BaseAdvisor:
         
         self.retriever = retriever
         
-        # Kept tight for speed: a short perspective + a few brief items + 2 sentences.
-        llm = get_llm(temperature=temperature, max_tokens=200)
+        # Headroom for Arabic (token-heavy) so structured output never truncates.
+        # The prompt keeps content short; this cap just prevents mid-JSON cutoffs.
+        llm = get_llm(temperature=temperature, max_tokens=600)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system",

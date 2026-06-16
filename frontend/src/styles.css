@@ -615,6 +615,98 @@ body {
 .bt-seat-name { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
 .bt-seat.active .bt-seat-name { color: var(--accent-deep); }
 .bt-target-tag { font-size: 12px; color: var(--accent); font-weight: 700; }
+.bt-seat-av { position: relative; }
+.bt-seat-num {
+  position: absolute; top: -6px; inset-inline-end: -6px;
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  background: var(--accent); color: #fff; font-family: var(--mono);
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.bt-seat-status {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--accent-deep);
+  background: var(--accent-soft); padding: 1px 7px; border-radius: 6px;
+}
+
+/* ── Active card (numbered, translucent, enlarges; reading-time progress) ───── */
+.active-card {
+  position: relative; overflow: hidden;
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  border: 1.5px solid var(--line); border-inline-start: 4px solid var(--accent);
+  border-radius: var(--r); padding: 22px 24px 24px; min-height: 130px;
+  animation: cardSwap 0.32s cubic-bezier(.22,.68,0,1.1);
+}
+@keyframes cardSwap {
+  0% { opacity: 0; transform: translateY(10px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.active-card.waiting {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; border-inline-start-color: var(--line); color: var(--ink-faint);
+}
+.ac-waiting-text { font-size: 13px; }
+.ac-progress {
+  position: absolute; top: 0; inset-inline-start: 0; height: 3px; width: 0%;
+  background: var(--accent); opacity: 0.85;
+}
+.ac-progress.run { animation: acFill linear forwards; }
+@keyframes acFill { from { width: 0%; } to { width: 100%; } }
+.ac-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.ac-number {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%;
+  background: var(--accent); color: #fff; font-family: var(--mono); font-weight: 700;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+}
+.ac-av {
+  width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft);
+  display: flex; align-items: center; justify-content: center;
+}
+.ac-meta { display: flex; flex-direction: column; }
+.ac-name { font-weight: 700; font-size: 16px; }
+.ac-role {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+  color: var(--ink-faint); text-transform: uppercase;
+}
+.ac-perspective { font-size: 22px; line-height: 1.4; color: var(--ink); margin-bottom: 14px; }
+.ac-perspective.out { font-size: 16px; color: var(--ink-faint); font-style: italic; }
+.ac-reasoning { font-size: 14px; color: var(--ink-soft); line-height: 1.6; margin-top: 12px; }
+
+/* ── Numbered timeline ────────────────────────────────────────────────────── */
+.timeline {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  margin: 16px 0 4px; justify-content: center;
+}
+.tl-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card);
+  font-family: var(--sans); transition: all 0.2s;
+}
+.tl-pill:hover { border-color: var(--accent); }
+.tl-pill.past { opacity: 0.65; }
+.tl-pill.active {
+  border-color: var(--accent); background: var(--accent-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.tl-pill.pending { opacity: 0.4; cursor: default; border-style: dashed; }
+.tl-num { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.tl-pill.active .tl-num { color: var(--accent-deep); }
+.tl-r2 { font-family: var(--mono); font-size: 9px; color: var(--ink-faint); }
+.tl-dots { color: var(--ink-faint); font-size: 12px; }
+
+/* ── Live persistent interjection ─────────────────────────────────────────── */
+.live-interject {
+  display: flex; gap: 10px; align-items: center; margin-top: 18px;
+}
+.live-interject .interject-input {
+  flex: 1; font-family: var(--sans); font-size: 14px; color: var(--ink);
+  background: var(--card); border: 1.5px dashed var(--line);
+  border-radius: 12px; padding: 11px 15px;
+}
+.live-interject .interject-input:focus { outline: none; border-color: #6f4bce; border-style: solid; }
+.live-interject.flash .interject-input { border-color: var(--for); border-style: solid; }
 
 /* ── Speaker stage ────────────────────────────────────────────────────────── */
 .stage {

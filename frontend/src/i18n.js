@@ -87,6 +87,11 @@ export const UI = {
   conditionsLabel: { en: "Conditions", ar: "الشروط" },
   recommendsLabel: { en: "Recommends", ar: "التوصيات" },
   outOfScope: { en: "outside this lens", ar: "خارج هذه الزاوية" },
+  speakingNow: { en: "speaking", ar: "يتحدّث" },
+  round1Short: { en: "Round 1", ar: "الجولة ١" },
+  round2Short: { en: "Round 2", ar: "الجولة ٢" },
+  deliberating: { en: "The board is deliberating…", ar: "المجلس يتداول…" },
+  synthesizing: { en: "The chairman is synthesizing…", ar: "الرئيس يصوغ القرار…" },
   play: { en: "Play", ar: "تشغيل" },
   pause: { en: "Pause", ar: "إيقاف" },
   next: { en: "Next", ar: "التالي" },
@@ -102,8 +107,8 @@ export const UI = {
   },
   interjected: { en: "you added context", ar: "أضفت سياقاً" },
   spaceHint: {
-    en: "Space = next · P = play/pause · R = replay",
-    ar: "مسافة = التالي · P = تشغيل/إيقاف · R = إعادة",
+    en: "Auto-playing · P = pause/play · ←/→ review · R = replay",
+    ar: "تشغيل تلقائي · P = إيقاف/تشغيل · ←/→ مراجعة · R = إعادة",
   },
 
   // verdict

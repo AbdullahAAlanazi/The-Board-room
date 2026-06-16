@@ -41,7 +41,14 @@ import {
   IconSend,
 } from "@tabler/icons-react";
 
-const HOLD_MS = 5000; // replay auto-advance dwell per speaker
+// Auto-advance dwell per contribution, scaled to reading time.
+function readingDwell(beat, t) {
+  const txt =
+    (t(beat.data.perspective) || "") + " " +
+    (beat.data.conditions || []).map(t).join(" ") + " " +
+    (t(beat.data.reasoning) || "");
+  return Math.min(11000, Math.max(4200, 1800 + txt.length * 42));
+}
 
 const TABS = [
   { id: "convene", label: UI.tabConvene, Icon: IconPencil },
@@ -553,7 +560,7 @@ function Advisors({ t }) {
 }
 
 // ── Boardroom table (shared visual) ───────────────────────────────────────────
-function BoardTable({ t, byId, activeId, targetId }) {
+function BoardTable({ t, byId, activeId, targetId, activeNum }) {
   const ids = ADV_LIST.map((a) => a.id);
   const pairs = [];
   for (let i = 0; i < ids.length; i++)
@@ -580,7 +587,7 @@ function BoardTable({ t, byId, activeId, targetId }) {
         )}
       </svg>
       <div className="bt-surface">
-        <IconGavel size={26} />
+        <IconGavel size={24} />
       </div>
       {ADV_LIST.map((a) => {
         const pos = SEATS[a.id];
@@ -600,9 +607,13 @@ function BoardTable({ t, byId, activeId, targetId }) {
             style={{ left: pos.x + "%", top: pos.y + "%", ...advVars(a) }}
           >
             <div className="bt-seat-av">
-              <AdvisorIcon name={a.icon} color={a.accent} size={26} />
+              <AdvisorIcon name={a.icon} color={a.accent} size={24} />
+              {isActive && activeNum != null && (
+                <span className="bt-seat-num">{activeNum}</span>
+              )}
             </div>
             <span className="bt-seat-name">{t(a.name)}</span>
+            {isActive && <span className="bt-seat-status">{t(UI.speakingNow)}</span>}
             {isTarget && <span className="bt-target-tag">⟵</span>}
           </div>
         );
@@ -611,28 +622,38 @@ function BoardTable({ t, byId, activeId, targetId }) {
   );
 }
 
-// The enlarged active speaker, shown under the table.
-function SpeakerStage({ t, advisorId, resp, thinking }) {
-  const a = advisorId ? ADVISORS[advisorId] : null;
-  if (!a) {
+// The enlarged, translucent active speaker card (numbered) under the table.
+function ActiveCard({ t, beat, n, total, playing, dwell }) {
+  if (!beat) {
     return (
-      <div className="stage empty">
+      <div className="active-card waiting">
         <div className="typing-dots"><span /><span /><span /></div>
-        <span className="stage-thinking">{t(UI.boardRunning)}</span>
+        <span className="ac-waiting-text">{t(UI.boardRunning)}</span>
       </div>
     );
   }
-  const target = resp?.respondsTo ? ADVISORS[resp.respondsTo] : null;
-  const outOfScope = resp && resp.relevant === false;
+  const a = ADVISORS[beat.data.advisor];
+  const resp = beat.data;
+  const target = resp.respondsTo ? ADVISORS[resp.respondsTo] : null;
+  const outOfScope = resp.relevant === false;
   return (
-    <div className="stage" style={advVars(a)} key={advisorId + (resp ? "1" : "0")}>
-      <div className="stage-head">
-        <div className="stage-av">
-          <AdvisorIcon name={a.icon} color={a.accent} size={26} />
+    <div className="active-card" style={advVars(a)} key={n}>
+      {/* reading-time progress */}
+      <div
+        className={"ac-progress" + (playing ? " run" : "")}
+        style={{ animationDuration: dwell + "ms" }}
+      />
+      <div className="ac-head">
+        <span className="ac-number">{n}</span>
+        <div className="ac-av">
+          <AdvisorIcon name={a.icon} color={a.accent} size={24} />
         </div>
-        <div className="stage-meta">
-          <span className="stage-name">{t(a.name)}</span>
-          <span className="stage-role">{t(a.role)}</span>
+        <div className="ac-meta">
+          <span className="ac-name">{t(a.name)}</span>
+          <span className="ac-role">
+            {beat.round === 2 ? t(UI.round2Short) : t(UI.round1Short)}
+            {" · "}{t(a.role)}
+          </span>
         </div>
         {target && (
           <span className="replying-chip">
@@ -649,15 +670,13 @@ function SpeakerStage({ t, advisorId, resp, thinking }) {
         )}
       </div>
 
-      {thinking ? (
-        <div className="typing-dots stage-dots"><span /><span /><span /></div>
-      ) : outOfScope ? (
-        <p className="stage-perspective out">
+      {outOfScope ? (
+        <p className="ac-perspective out">
           <span className="oos-tag">{t(UI.outOfScope)}</span> {t(resp.perspective)}
         </p>
       ) : (
         <>
-          <p className="stage-perspective display">{t(resp.perspective)}</p>
+          <p className="ac-perspective display">{t(resp.perspective)}</p>
           {resp.conditions?.length > 0 && (
             <div className="stage-tags">
               <span className="tags-label"><IconCheck size={13} /> {t(UI.conditionsLabel)}</span>
@@ -674,104 +693,182 @@ function SpeakerStage({ t, advisorId, resp, thinking }) {
               ))}
             </div>
           )}
-          {resp.reasoning && <p className="stage-reasoning">{t(resp.reasoning)}</p>}
+          {resp.reasoning && <p className="ac-reasoning">{t(resp.reasoning)}</p>}
         </>
       )}
     </div>
   );
 }
 
-function InterjectionBar({ t, value, setValue, onContinue, continueLabel }) {
+// Numbered timeline of every contribution — click any to review.
+function Timeline({ t, beats, idx, onJump, expected }) {
+  const slots = [];
+  for (let i = 0; i < (expected || beats.length); i++) {
+    const b = beats[i];
+    slots.push(b ? { b, i } : { b: null, i });
+  }
   return (
-    <div className="interject">
-      <div className="interject-row">
-        <input
-          className="interject-input"
-          value={value}
-          placeholder={t(UI.interjectPlaceholder)}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") onContinue(); }}
-        />
-        <button className="ctrl primary" onClick={onContinue}>
-          {continueLabel} <IconArrowRight size={16} />
-        </button>
-      </div>
+    <div className="timeline">
+      {slots.map(({ b, i }) =>
+        b ? (
+          <button
+            key={i}
+            className={
+              "tl-pill" + (i === idx ? " active" : "") + (i < idx ? " past" : "")
+            }
+            style={advVars(ADVISORS[b.data.advisor])}
+            onClick={() => onJump(i)}
+            title={`${i + 1}. ${t(ADVISORS[b.data.advisor].name)}`}
+          >
+            <span className="tl-num">{i + 1}</span>
+            <AdvisorIcon name={ADVISORS[b.data.advisor].icon} color={ADVISORS[b.data.advisor].accent} size={14} />
+            {b.round === 2 && <span className="tl-r2">R2</span>}
+          </button>
+        ) : (
+          <span key={i} className="tl-pill pending">
+            <span className="tl-num">{i + 1}</span>
+            <span className="tl-dots">···</span>
+          </span>
+        )
+      )}
     </div>
   );
 }
 
-// ── Live debate (round by round, interruptible) ───────────────────────────────
+// Minimal transport: pause/resume + replay. No "next" — it auto-advances.
+function Transport({ t, playing, setPlaying, onReplay, ended, onVerdict }) {
+  return (
+    <div className="controls">
+      {!ended && (
+        <button className="ctrl primary" onClick={() => setPlaying((p) => !p)}>
+          {playing ? <IconPlayerPauseFilled size={16} /> : <IconPlayerPlayFilled size={16} />}
+          {playing ? t(UI.pause) : t(UI.play)}
+        </button>
+      )}
+      {onReplay && (
+        <button className="ctrl" onClick={onReplay}>
+          <IconRefresh size={15} /> {t(UI.restart)}
+        </button>
+      )}
+      {ended && onVerdict && (
+        <button className="ctrl accent" onClick={onVerdict}>
+          {t(UI.toVerdict)} <IconArrowRight size={16} />
+        </button>
+      )}
+      <span className="space-hint">{t(UI.spaceHint)}</span>
+    </div>
+  );
+}
+
+// ── Live debate (auto-flows through rounds; persistent interjection) ───────────
 function LiveDebate({ t, lang, decision, baseContext, onSessionReady, setSaved, onVerdict }) {
-  // phase: r1 | r1pause | r2 | r2pause | verdict | done | error
+  // phase: r1 | r2 | verdict | done | error
   const [phase, setPhase] = useState("r1");
-  const [round1, setRound1] = useState([]);
-  const [round2, setRound2] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [beats, setBeats] = useState([]);          // {round, data} in arrival order
+  const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(true);
   const [verdict, setVerdict] = useState(null);
   const [interject, setInterject] = useState("");
+  const [flash, setFlash] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
+
   const contextRef = useRef(baseContext || "");
+  const interjectRef = useRef("");
+  const round1Ref = useRef([]);
+  const round2Ref = useRef([]);
   const cancelRef = useRef(null);
   const finalSession = useRef(null);
 
-  const round = phase === "r2" || phase === "r2pause" ? 2 : 1;
-  const byId = useMemo(() => {
-    const m = {};
-    round1.forEach((r) => (m[r.advisor] = r));
-    if (round >= 2) round2.forEach((r) => (m[r.advisor] = r));
-    return m;
-  }, [round1, round2, round]);
-
-  const activeResp = activeId ? byId[activeId] : null;
-  const targetId = round >= 2 && activeResp?.respondsTo ? activeResp.respondsTo : null;
-
-  // kick off round 1 on mount
+  // ── orchestration: round1 → round2 → verdict, back-to-back ──────────────────
   useEffect(() => {
     cancelRef.current = streamRound(decision, lang, contextRef.current, 1, [], {
       onAdvisor: (a) => {
-        setRound1((prev) => [...prev, a]);
-        setActiveId(a.advisor);
+        round1Ref.current.push(a);
+        setBeats((b) => [...b, { round: 1, data: a }]);
       },
-      onDone: () => setPhase("r1pause"),
+      onDone: startRound2,
       onError: () => setPhase("error"),
     });
     return () => cancelRef.current?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const goRound2 = () => {
-    if (interject.trim()) {
-      contextRef.current += `\n\n[Board chair adds]: ${interject.trim()}`;
+  function applyInterjection() {
+    if (interjectRef.current.trim()) {
+      contextRef.current += `\n\n[Board chair adds]: ${interjectRef.current.trim()}`;
+      interjectRef.current = "";
       setInterject("");
     }
+  }
+
+  function startRound2() {
+    applyInterjection();
     setPhase("r2");
-    setActiveId(null);
-    cancelRef.current = streamRound(decision, lang, contextRef.current, 2, round1, {
+    cancelRef.current = streamRound(decision, lang, contextRef.current, 2, round1Ref.current, {
       onAdvisor: (a) => {
-        setRound2((prev) => [...prev, a]);
-        setActiveId(a.advisor);
+        round2Ref.current.push(a);
+        setBeats((b) => [...b, { round: 2, data: a }]);
       },
-      onDone: () => setPhase("r2pause"),
+      onDone: goVerdict,
       onError: () => setPhase("error"),
     });
-  };
+  }
 
-  const goVerdict = async () => {
-    if (interject.trim()) {
-      contextRef.current += `\n\n[Board chair adds]: ${interject.trim()}`;
-      setInterject("");
-    }
+  async function goVerdict() {
+    applyInterjection();
     setPhase("verdict");
     try {
-      const v = await runVerdict(decision, lang, contextRef.current, round1, round2);
+      const v = await runVerdict(
+        decision, lang, contextRef.current, round1Ref.current, round2Ref.current
+      );
       setVerdict(v);
-      const sess = buildLiveSession(decision, round1, round2, v);
+      const sess = buildLiveSession(decision, round1Ref.current, round2Ref.current, v);
       finalSession.current = sess;
       onSessionReady(sess);
       setPhase("done");
     } catch {
       setPhase("error");
     }
+  }
+
+  const total = 2 * ADV_LIST.length; // expected contributions
+  const beat = beats[idx];
+  const dwell = beat ? readingDwell(beat, t) : 4200;
+  const atLastAvailable = idx >= beats.length - 1;
+  const ended = phase === "done" && atLastAvailable;
+
+  // auto-advance through available beats
+  useEffect(() => {
+    if (!playing || !beat) return;
+    if (idx < beats.length - 1) {
+      const id = setTimeout(() => setIdx((s) => s + 1), dwell);
+      return () => clearTimeout(id);
+    }
+    // caught up to the last available beat; if verdict is in, stop here
+    // otherwise we simply wait — new beats will re-trigger this effect.
+  }, [playing, idx, beats.length, dwell, beat]);
+
+  const jump = (i) => { if (beats[i]) { setIdx(i); setPlaying(false); } };
+
+  // keyboard: P pause/play, R replay, ←/→ review
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+      if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
+      else if (e.key === "ArrowRight") jump(Math.min(beats.length - 1, idx + 1));
+      else if (e.key === "ArrowLeft") jump(Math.max(0, idx - 1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, beats.length]);
+
+  const sendInterject = () => {
+    if (!interject.trim()) return;
+    interjectRef.current = interject;
+    setFlash(true);
+    setTimeout(() => setFlash(false), 1600);
+    setInterject("");
   };
 
   const onSave = () => {
@@ -782,15 +879,29 @@ function LiveDebate({ t, lang, decision, baseContext, onSessionReady, setSaved, 
     }
   };
 
-  const roundLabel =
-    round === 2 ? t(UI.round2) : t(UI.round1);
-  const streaming = phase === "r1" || phase === "r2";
+  const byId = useMemo(() => {
+    const m = {};
+    beats.slice(0, idx + 1).forEach((b) => (m[b.data.advisor] = b.data));
+    return m;
+  }, [beats, idx]);
+
+  const activeId = beat?.data.advisor || null;
+  const targetId = beat?.round === 2 ? beat.data.respondsTo : null;
+  const waiting = atLastAvailable && !ended; // deliberating / synthesizing
+
+  const status = !beat
+    ? t(UI.boardRunning)
+    : waiting
+    ? (phase === "verdict" ? t(UI.synthesizing) : t(UI.deliberating))
+    : beat.round === 2
+    ? t(UI.round2)
+    : t(UI.round1);
 
   return (
     <div className="panel-pad">
       <div className="debate-top">
         <h2 className="display debate-h2">{t(UI.debateTitle)}</h2>
-        {phase === "done" && (
+        {ended && (
           <div className="debate-tools">
             <button className="ghost-btn" onClick={onSave}>
               <IconDeviceFloppy size={15} /> {savedTick ? t(UI.saved) : t(UI.save)}
@@ -812,61 +923,49 @@ function LiveDebate({ t, lang, decision, baseContext, onSessionReady, setSaved, 
       </div>
 
       <div className="round-banner">
-        <span className="round-label">{roundLabel}</span>
-        {streaming && <IconLoader2 size={14} className="spin" />}
+        <span className="round-label">{status}</span>
+        {waiting && <IconLoader2 size={14} className="spin" />}
+        <span className="round-count">{Math.min(idx + 1, beats.length)} / {total}</span>
       </div>
 
-      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} />
+      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} activeNum={beat ? idx + 1 : null} />
 
-      <SpeakerStage
-        t={t}
-        advisorId={activeId}
-        resp={activeResp}
-        thinking={false}
-      />
+      <ActiveCard t={t} beat={beat} n={idx + 1} total={total} playing={playing && !waiting} dwell={dwell} />
 
-      {/* controls / interjection */}
-      {phase === "r1pause" && (
-        <InterjectionBar
-          t={t}
-          value={interject}
-          setValue={setInterject}
-          onContinue={goRound2}
-          continueLabel={t(UI.round2)}
-        />
-      )}
-      {phase === "r2pause" && (
-        <InterjectionBar
-          t={t}
-          value={interject}
-          setValue={setInterject}
-          onContinue={goVerdict}
-          continueLabel={t(UI.toVerdict)}
-        />
-      )}
-      {phase === "verdict" && (
-        <div className="discover-loading">
-          <IconLoader2 size={18} className="spin" />
-          <span>{t(UI.boardRunning)}</span>
-        </div>
-      )}
-      {phase === "done" && (
-        <div className="controls">
-          <button className="ctrl accent" onClick={onVerdict}>
-            {t(UI.toVerdict)} <IconArrowRight size={16} />
-          </button>
-        </div>
-      )}
-      {phase === "error" && <p className="error-msg">{t(UI.apiError)}</p>}
+      <Timeline t={t} beats={beats} idx={idx} onJump={jump} expected={total} />
 
-      {streaming && (
-        <p className="interject-hint">{t(UI.interjectLabel)} ↓ {t(UI.thinking)}</p>
+      {phase === "error" ? (
+        <p className="error-msg">{t(UI.apiError)}</p>
+      ) : (
+        <>
+          {!ended && (
+            <div className={"live-interject" + (flash ? " flash" : "")}>
+              <input
+                className="interject-input"
+                value={interject}
+                placeholder={flash ? t(UI.interjected) + " ✓" : t(UI.interjectPlaceholder)}
+                onChange={(e) => setInterject(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") sendInterject(); }}
+              />
+              <button className="ctrl" onClick={sendInterject} disabled={!interject.trim()}>
+                <IconSend size={15} /> {t(UI.send)}
+              </button>
+            </div>
+          )}
+          <Transport
+            t={t}
+            playing={playing}
+            setPlaying={setPlaying}
+            ended={ended}
+            onVerdict={onVerdict}
+          />
+        </>
       )}
     </div>
   );
 }
 
-// ── Replay debate (canned / saved sessions) ───────────────────────────────────
+// ── Replay debate (canned / saved sessions) — same auto-flow ──────────────────
 function ReplayDebate({ t, session, setSaved, onVerdict }) {
   const beats = useMemo(() => {
     const b = [];
@@ -875,44 +974,41 @@ function ReplayDebate({ t, session, setSaved, onVerdict }) {
     return b;
   }, [session]);
 
-  const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [ended, setEnded] = useState(false);
   const [savedTick, setSavedTick] = useState(false);
 
-  useEffect(() => {
-    setStep(0);
-    setPlaying(false);
-  }, [session]);
+  useEffect(() => { setIdx(0); setPlaying(true); setEnded(false); }, [session]);
 
-  const beat = beats[step] || beats[0];
-  const isLast = step >= beats.length - 1;
-
-  const next = useCallback(() => {
-    setStep((s) => {
-      if (s >= beats.length - 1) { setPlaying(false); return s; }
-      return s + 1;
-    });
-  }, [beats.length]);
-
-  const restart = useCallback(() => { setStep(0); setPlaying(false); }, []);
+  const beat = beats[idx] || beats[0];
+  const dwell = readingDwell(beat, t);
 
   useEffect(() => {
     if (!playing) return;
-    if (isLast) { setPlaying(false); return; }
-    const id = setTimeout(next, HOLD_MS);
+    const id = setTimeout(() => {
+      setIdx((s) => {
+        if (s >= beats.length - 1) { setPlaying(false); setEnded(true); return s; }
+        return s + 1;
+      });
+    }, dwell);
     return () => clearTimeout(id);
-  }, [playing, step, isLast, next]);
+  }, [playing, idx, dwell, beats.length]);
+
+  const jump = (i) => { setIdx(i); setPlaying(false); };
+  const replay = () => { setIdx(0); setEnded(false); setPlaying(true); };
 
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
-      if (e.code === "Space") { e.preventDefault(); next(); }
-      else if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
-      else if (e.key.toLowerCase() === "r") restart();
+      if (e.key.toLowerCase() === "p") setPlaying((p) => !p);
+      else if (e.key.toLowerCase() === "r") replay();
+      else if (e.key === "ArrowRight") { setPlaying(false); setIdx((s) => Math.min(beats.length - 1, s + 1)); }
+      else if (e.key === "ArrowLeft") { setPlaying(false); setIdx((s) => Math.max(0, s - 1)); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, restart]);
+  }, [beats.length]);
 
   const onSave = () => {
     setSaved(saveSession(session));
@@ -920,12 +1016,11 @@ function ReplayDebate({ t, session, setSaved, onVerdict }) {
     setTimeout(() => setSavedTick(false), 1800);
   };
 
-  // advisors revealed up to current step (for the table)
   const byId = useMemo(() => {
     const m = {};
-    beats.slice(0, step + 1).forEach((b) => (m[b.data.advisor] = b.data));
+    beats.slice(0, idx + 1).forEach((b) => (m[b.data.advisor] = b.data));
     return m;
-  }, [beats, step]);
+  }, [beats, idx]);
 
   const activeId = beat.data.advisor;
   const targetId = beat.round === 2 ? beat.data.respondsTo : null;
@@ -944,9 +1039,6 @@ function ReplayDebate({ t, session, setSaved, onVerdict }) {
           >
             <IconDownload size={15} /> {t(UI.download)}
           </button>
-          <button className="ghost-btn" onClick={restart}>
-            <IconRefresh size={15} /> {t(UI.restart)}
-          </button>
         </div>
       </div>
 
@@ -959,31 +1051,24 @@ function ReplayDebate({ t, session, setSaved, onVerdict }) {
       </div>
 
       <div className="round-banner">
-        <span className="round-label">
-          {t(beat.round === 2 ? UI.round2 : UI.round1)}
-        </span>
-        <span className="round-count">{step + 1} / {beats.length}</span>
+        <span className="round-label">{t(beat.round === 2 ? UI.round2 : UI.round1)}</span>
+        <span className="round-count">{idx + 1} / {beats.length}</span>
       </div>
 
-      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} />
+      <BoardTable t={t} byId={byId} activeId={activeId} targetId={targetId} activeNum={idx + 1} />
 
-      <SpeakerStage t={t} advisorId={activeId} resp={beat.data} thinking={false} />
+      <ActiveCard t={t} beat={beat} n={idx + 1} total={beats.length} playing={playing} dwell={dwell} />
 
-      <div className="controls">
-        <button className="ctrl primary" onClick={() => setPlaying((p) => !p)}>
-          {playing ? <IconPlayerPauseFilled size={17} /> : <IconPlayerPlayFilled size={17} />}
-          {playing ? t(UI.pause) : t(UI.play)}
-        </button>
-        <button className="ctrl" onClick={next} disabled={isLast}>
-          {t(UI.next)} <IconPlayerTrackNextFilled size={15} />
-        </button>
-        {isLast && (
-          <button className="ctrl accent" onClick={onVerdict}>
-            {t(UI.toVerdict)} <IconArrowRight size={16} />
-          </button>
-        )}
-        <span className="space-hint">{t(UI.spaceHint)}</span>
-      </div>
+      <Timeline t={t} beats={beats} idx={idx} onJump={jump} expected={beats.length} />
+
+      <Transport
+        t={t}
+        playing={playing}
+        setPlaying={setPlaying}
+        onReplay={replay}
+        ended={ended}
+        onVerdict={onVerdict}
+      />
     </div>
   );
 }

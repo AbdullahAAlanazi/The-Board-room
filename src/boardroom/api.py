@@ -39,7 +39,8 @@ from boardroom.board import (
     chairman_synthesize,
     discover_questions,
     intake,
-    round2_context,
+    run_round1,
+    run_round2,
     run_board,
 )
 from boardroom.rag import DOCUMENTS_DIR, build_retriever
@@ -212,36 +213,19 @@ def discover(req: BoardRequest):
         return discover_questions(req.decision, language=language, context=context)
 
 
-@app.post("/api/round")
-async def round_stream(req: RoundRequest) -> StreamingResponse:
-    """SSE — run one round, streaming each advisor's perspective as it completes.
-    Folds the session profile + RAG into the context alongside any interjections."""
+@app.post("/api/round", response_model=List[AdvisorResponse])
+def round_endpoint(req: RoundRequest) -> List[AdvisorResponse]:
+    """Run one round (advisors in parallel) and return all perspectives as JSON.
+
+    Plain JSON (not SSE) so it survives managed-host proxies that buffer/drop
+    long-lived streaming responses. Each round is ~5s; the UI paces the reveal."""
     language = _LANGUAGES.get(req.lang, "English")
     retriever = _session.get("retriever")
-    advisors = get_advisors(retriever=retriever)
-
     base_ctx = _build_context(req.decision, extra=req.context)
-    if req.round == 2:
-        ctx = round2_context(req.prior, base_ctx)
-    else:
-        ctx = base_ctx
-
-    async def generate():
-        loop = asyncio.get_event_loop()
-        tasks = [
-            loop.run_in_executor(None, adv.analyze, req.decision, ctx, language)
-            for adv in advisors
-        ]
-        for coro in asyncio.as_completed(tasks):
-            result = await coro
-            yield f"data: {json.dumps({'type': 'advisor', 'data': result.model_dump()})}\n\n"
-        yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    with contextlib.redirect_stdout(sys.stderr):
+        if req.round == 2:
+            return run_round2(req.decision, base_ctx, req.prior, language=language, retriever=retriever)
+        return run_round1(req.decision, base_ctx, language=language, retriever=retriever)
 
 
 @app.post("/api/verdict", response_model=ChairmanVerdict)

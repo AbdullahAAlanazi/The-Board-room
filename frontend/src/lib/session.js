@@ -115,10 +115,12 @@ export async function runIntake(decision, lang = "en") {
   };
 }
 
-// Stream one round via SSE. callbacks.onAdvisor(normalized) fires per advisor;
-// callbacks.onDone(allAdvisors[]) when the round completes. Returns cancel().
+// Run one round (plain JSON — robust behind managed-host proxies; no SSE).
+// Keeps the streaming callback shape: onAdvisor(normalized) per advisor, then
+// onDone(allAdvisors[]). Returns a cancel() function.
 export function streamRound(decision, lang, context, round, prior, callbacks = {}) {
   const ctrl = new AbortController();
+  let aborted = false;
 
   (async () => {
     let res;
@@ -143,43 +145,28 @@ export function streamRound(decision, lang, context, round, prior, callbacks = {
         }),
         signal: ctrl.signal,
       });
-    } catch {
-      callbacks.onError?.();
+    } catch (e) {
+      if (e.name !== "AbortError") callbacks.onError?.();
       return;
     }
     if (!res.ok) { callbacks.onError?.(); return; }
 
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = "";
-    const collected = [];
+    let data;
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (raw === "[DONE]") { callbacks.onDone?.(collected); return; }
-          try {
-            const ev = JSON.parse(raw);
-            if (ev.type === "advisor") {
-              const a = normAdvisor(ev.data);
-              collected.push(a);
-              callbacks.onAdvisor?.(a);
-            }
-          } catch { /* malformed event, skip */ }
-        }
-      }
-    } catch (e) {
-      if (e.name !== "AbortError") callbacks.onError?.();
+      data = await res.json();
+    } catch {
+      callbacks.onError?.();
+      return;
     }
+    const list = (Array.isArray(data) ? data : data.advisors || []).map(normAdvisor);
+    for (const a of list) {
+      if (aborted) return;
+      callbacks.onAdvisor?.(a);
+    }
+    callbacks.onDone?.(list);
   })();
 
-  return () => ctrl.abort();
+  return () => { aborted = true; ctrl.abort(); };
 }
 
 export async function runVerdict(decision, lang, context, round1, round2) {

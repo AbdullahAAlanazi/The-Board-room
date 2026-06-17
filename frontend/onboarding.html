@@ -793,8 +793,11 @@ function removeFile(i){
   buildFileList();
 }
 
-const API_URL = 'http://localhost:8000';
-const APP_URL = 'http://localhost:8000/app';
+// Same-origin by default (works when the backend serves this page).
+// Override by setting window.__API_BASE__ / window.__APP_BASE__ before this script
+// (e.g. when the frontend is hosted separately from the backend).
+const API_URL = (typeof window !== 'undefined' && window.__API_BASE__) || '';
+const APP_URL = ((typeof window !== 'undefined' && window.__APP_BASE__) || '') + '/app';
 
 function buildOnboardingPayload(){
   return {
